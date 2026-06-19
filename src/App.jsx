@@ -1,5 +1,6 @@
-請檢察程式碼有無更正錯誤import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // 加入這一行
 import { ShoppingCart, Store, Settings, X, Plus, Trash2, Check, Package, CreditCard, ArrowLeft, Truck, Wallet, Banknote, ClipboardCheck, Calendar, Search, Menu, ChevronRight } from 'lucide-react';
+
 
 // --- 預設商品資料 ---
 const initialProducts = [
@@ -27,20 +28,23 @@ const initialProducts = [
     stock:10000, 
     iconType: '社群分潤' 
   },
-  { 
-    id: 3, 
-    name: '卡紙設計/代印', 
-    price:6, 
-    desc: '一張a6大小卡紙6塊/彩色黑白/', 
-    detail: '',
-    category: '質感香氛',
-    specs: [
-      { name: '設計+代印' },
-      { name: '代印' }
-    ], 
-    stock: 20, 
-    iconType: '卡紙設計/代印' 
-  },
+ // ✅ 正確的資料結構
+{ 
+  id: 3, 
+  name: '卡紙設計/代印', 
+  price: 6, 
+  desc: '一張a6大小卡紙6塊/彩色黑白/', 
+  detail: '',
+  category: '卡紙設計/代印', // 這裡順便幫你修正，因為原本寫 '質感香氛'，但你的分類裡沒有這個
+  specs: [
+    { 
+      name: '服務類型', 
+      options: ['設計+代印', '代印'] // 加上 options 陣列
+    }
+  ], 
+  stock: 20, 
+  iconType: '卡紙設計/代印' 
+},
 ];
 
 // --- 預設分類項目 ---
@@ -215,7 +219,8 @@ const finalizeOrder = (paymentMethod, bankLast5 = null) => {
     const [selectedSpecs, setSelectedSpecs] = useState(() => {
       const initial = {};
       product.specs?.forEach(specGroup => {
-        initial[specGroup.name] = specGroup.options[0] || '';
+       // 加上 ?. 如果 options 不存在就不會報錯，會直接回傳 undefined 然後套用後面的 ''
+initial[specGroup.name] = specGroup.options?.[0] || '';
       });
       return initial;
     });
@@ -290,7 +295,8 @@ const finalizeOrder = (paymentMethod, bankLast5 = null) => {
     const [selectedSpecs, setSelectedSpecs] = useState(() => {
       const initial = {};
       selectedProduct?.specs?.forEach(specGroup => {
-        initial[specGroup.name] = specGroup.options[0] || '';
+        // 加上 ?. 如果 options 不存在就不會報錯，會直接回傳 undefined 然後套用後面的 ''
+initial[specGroup.name] = specGroup.options?.[0] || '';
       });
       return initial;
     });
