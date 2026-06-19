@@ -4,49 +4,51 @@ import { ShoppingCart, Store, Settings, X, Plus, Trash2, Check, Package, CreditC
 
 // --- 預設商品資料 ---
 const initialProducts = [
-  { 
-    id: 1, 
-    name: '批發', 
-    price: 0, 
-    desc: '2件起批/國際運費由我們負擔/可到店取貨or面交', 
-    detail: '1.點選商品圖>>查看商品與價錢(連結已是批發價格) 2.挑選商品直接下單 3.皆從韓國叫貨(為壓低成本皆採海運7~21天)>有現貨2~5天 4.不提供商品圖請自行準備',
-    category: '批發',
-    specs: [
-     ], 
-    stock: 100000, 
-    iconType: '批發' 
-  },
-  { 
-    id: 2, 
-    name: '社群分潤', 
-    price: 0, 
-    desc: '只要分享圖片與連結，有人下單即可分潤。', 
-    detail: '1.我們提供商品圖片與分潤連結 2.您在社群or賣場推廣 3.有客人下單您分成總金額30%(例如客人下單500您會獲得150) 4.合作期限1個月/推廣方式自由選擇',
-    category: '社群分潤',
-    specs: [
-     ], 
-    stock:10000, 
-    iconType: '社群分潤' 
-  },
- // ✅ 正確的資料結構
-{ 
-  id: 3, 
-  name: '卡紙設計/代印', 
-  price: 6, 
-  desc: '一張a6大小卡紙6塊/彩色黑白/', 
-  detail: '',
-  category: '卡紙設計/代印', // 這裡順便幫你修正，因為原本寫 '質感香氛'，但你的分類裡沒有這個
-  specs: [
-    { 
-      name: '服務類型', 
-      options: ['設計+代印', '代印'] // 加上 options 陣列
-    }
-  ], 
-  stock: 20, 
-  iconType: '卡紙設計/代印' 
-},
+  { 
+    id: 1, 
+    name: '批發', 
+    price: 0, 
+    desc: '2件起批/國際運費由我們負擔/可到店取貨or面交', 
+    detail: '1.點選商品圖>>查看商品與價錢(連結已是批發價格) 2.挑選商品直接下單 3.皆從韓國叫貨(為壓低成本皆採海運7~21天)>有現貨2~5天 4.不提供商品圖請自行準備',
+    category: '批發',
+    specs: [], 
+    stock: 100000, 
+    iconType: '批發',
+    // ✨ 新增圖片網址 (這裡使用質感的飾品情境圖作為範例)
+    image: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=600&auto=format&fit=crop'
+  },
+  { 
+    id: 2, 
+    name: '社群分潤', 
+    price: 0, 
+    desc: '只要分享圖片與連結，有人下單即可分潤。', 
+    detail: '1.我們提供商品圖片與分潤連結 2.您在社群or賣場推廣 3.有客人下單您分成總金額30%(例如客人下單500您會獲得150) 4.合作期限1個月/推廣方式自由選擇',
+    category: '社群分潤',
+    specs: [], 
+    stock: 10000, 
+    iconType: '社群分潤',
+    // ✨ 新增圖片網址 (這裡使用柔和的奶油色調情境圖)
+    image: 'https://images.unsplash.com/photo-1596462502278-27bf85033e5a?q=80&w=600&auto=format&fit=crop'
+  },
+  { 
+    id: 3, 
+    name: '卡紙設計/代印', 
+    price: 6, 
+    desc: '一張a6大小卡紙6塊/彩色黑白/', 
+    detail: '',
+    category: '卡紙設計/代印', 
+    specs: [
+      { 
+        name: '服務類型', 
+        options: ['設計+代印', '代印'] 
+      }
+    ], 
+    stock: 20, 
+    iconType: '卡紙設計/代印',
+    // ✨ 新增圖片網址 (紙品設計情境圖)
+    image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?q=80&w=600&auto=format&fit=crop'
+  },
 ];
-
 // --- 預設分類項目 ---
 const initialCategories = ['所有商品', '批發', '社群分潤', '卡紙設計/代印'];
 
