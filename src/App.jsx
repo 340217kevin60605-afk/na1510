@@ -319,7 +319,7 @@ initial[specGroup.name] = specGroup.options?.[0] || '';
         
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 overflow-hidden flex flex-col md:flex-row">
           <div className="w-full md:w-1/2 aspect-square bg-stone-50">
-            {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <ProductGraphic type={item.iconType || 'box'} />}/>}
+            {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-cover"/> : <ProductGraphic type={selectedProduct.iconType || 'box'} />}
           </div>
           <div className="w-full md:w-1/2 p-6 md:p-8 flex flex-col">
             <span className="text-[10px] font-medium text-[#A6907C] tracking-widest mb-3 bg-[#FAF6F0] px-2.5 py-1 rounded-full self-start">{selectedProduct.category || '一般商品'}</span>
@@ -531,7 +531,7 @@ initial[specGroup.name] = specGroup.options?.[0] || '';
                   <div key={idx} className="flex justify-between items-start text-xs">
                     <div className="flex gap-3">
                       <div className="w-10 h-12 rounded-lg bg-white border border-stone-100 flex-shrink-0 overflow-hidden">
-                        {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-cover"/> : <ProductGraphic type="box" />}
+                      {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <ProductGraphic type={item.iconType || 'box'} />}
                       </div>
                       <div className="min-w-0">
                         <div className="text-stone-700 truncate font-normal">{item.name}</div>
