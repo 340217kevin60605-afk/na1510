@@ -319,7 +319,7 @@ initial[specGroup.name] = specGroup.options?.[0] || '';
         
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 overflow-hidden flex flex-col md:flex-row">
           <div className="w-full md:w-1/2 aspect-square bg-stone-50">
-            {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-cover"/> : <ProductGraphic type="box"/>}
+            {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <ProductGraphic type={item.iconType || 'box'} />}/>}
           </div>
           <div className="w-full md:w-1/2 p-6 md:p-8 flex flex-col">
             <span className="text-[10px] font-medium text-[#A6907C] tracking-widest mb-3 bg-[#FAF6F0] px-2.5 py-1 rounded-full self-start">{selectedProduct.category || '一般商品'}</span>
@@ -571,8 +571,7 @@ const PaymentView = () => {
 
   const paymentMethods = [
     { id: 'cod', name: '貨到付款', icon: <Truck size={20} />, desc: '商品送達時以現金支付' },
-    { id: 'bank', name: '銀行匯款', icon: <Banknote size={20} />, desc: '請匯款後填寫帳號後五碼以利核對' },
-    { id: 'ecpay', name: '線上刷卡', icon: <CreditCard size={20} />, desc: '安全金流，支援信用卡付款' }
+    { id: 'bank', name: '銀行匯款', icon: <Banknote size={20} />, desc: '請匯款後填寫帳號後五碼以利核對' }
   ];
 
   const handleConfirmPayment = () => {
@@ -592,10 +591,29 @@ const PaymentView = () => {
               <div><h4 className="font-bold text-sm">{method.name}</h4><p className="text-xs text-gray-500">{method.desc}</p></div>
             </button>
             {selectedMethod === '銀行匯款' && method.id === 'bank' && (
-              <div className="px-4 pb-4">
-                <input type="text" maxLength="5" placeholder="請輸入匯款帳號後五碼" className="w-full text-sm border p-2 rounded focus:ring-[#A6907C]" value={bankLast5} onChange={e => setBankLast5(e.target.value.replace(/\D/g, ''))} />
-              </div>
-            )}
+  <div className="px-4 pb-4 space-y-4">
+    {/* --- 新增：顯示店家匯款帳號資訊 --- */}
+    <div className="bg-white p-4 rounded-xl border border-stone-200 text-xs text-stone-600 space-y-1.5 shadow-sm">
+      <p className="font-medium text-stone-800 text-sm mb-2">🏦 請先匯款至以下帳戶：</p>
+      <p>銀行代碼：奶油銀行 (822)</p>
+      <p>匯款帳號：123-456789-012</p>
+      <p>戶名：奶油選物工作室</p>
+      <p className="text-rose-500 pt-2 font-medium">※ 匯款完成後，請於下方輸入您的帳號後五碼並送出。</p>
+    </div>
+    
+    {/* --- 原本的輸入框 (微調了 placeholder 的文字) --- */}
+    <div>
+      <input 
+        type="text" 
+        maxLength="5" 
+        placeholder="請輸入「您的」匯款帳號後五碼" 
+        className="w-full text-sm border border-stone-300 p-3 rounded-xl focus:ring-1 focus:ring-[#A6907C] focus:border-[#A6907C] outline-none transition-all shadow-sm" 
+        value={bankLast5} 
+        onChange={e => setBankLast5(e.target.value.replace(/\D/g, ''))} 
+      />
+    </div>
+  </div>
+)}
           </div>
         ))}
         <button onClick={handleConfirmPayment} className="w-full bg-[#4A4A4A] text-white py-3 rounded-lg font-bold mt-4">確認付款並建立訂單</button>
@@ -868,7 +886,7 @@ const PaymentView = () => {
       <div className="max-w-sm mx-auto py-20 text-center">
         <div className="bg-white p-8 rounded-2xl shadow-sm border">
           <h2 className="text-lg font-bold mb-4">請輸入後台密碼</h2>
-          <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full border p-2 rounded mb-4 text-center" placeholder="輸入 1510" />
+          <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full border p-2 rounded mb-4 text-center" placeholder="輸入密碼" />
           <button onClick={() => passwordInput === '1510' ? setIsAdminLoggedIn(true) : alert('密碼錯誤')} className="w-full bg-[#A6907C] text-white py-2 rounded">登入</button>
         </div>
       </div>
