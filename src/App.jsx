@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Store, Settings, X, Plus, Trash2, Check, Package, CreditCard, ArrowLeft, Truck, Wallet, Banknote, ClipboardCheck, Calendar, Search, Menu, ChevronRight } from 'lucide-react';
 
 // --- 預設商品資料 ---
@@ -89,13 +89,22 @@ const ProductGraphic = ({ type }) => {
 };
 
 export default function App() {
-  const [view, setView] = useState('store'); 
-  const [products, setProducts] = useState(initialProducts);
-  const [categories, setCategories] = useState(initialCategories);
-  const [selectedCategory, setSelectedCategory] = useState('所有商品');
-  const [cart, setCart] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
+ const [view, setView] = useState('store'); 
+// 改用 LocalStorage 記憶資料
+const [products, setProducts] = useState(() => JSON.parse(localStorage.getItem('na_products')) || initialProducts);
+const [categories, setCategories] = useState(() => JSON.parse(localStorage.getItem('na_categories')) || initialCategories);
+const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('na_cart')) || []);
+const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('na_orders')) || []);
+
+const [selectedCategory, setSelectedCategory] = useState('所有商品');
+const [isCartOpen, setIsCartOpen] = useState(false);
+const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false); // 新增密碼鎖狀態
+
+// 當資料改變時自動存檔
+useEffect(() => localStorage.setItem('na_products', JSON.stringify(products)), [products]);
+useEffect(() => localStorage.setItem('na_categories', JSON.stringify(categories)), [categories]);
+useEffect(() => localStorage.setItem('na_cart', JSON.stringify(cart)), [cart]);
+useEffect(() => localStorage.setItem('na_orders', JSON.stringify(orders)), [orders]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [pendingOrder, setPendingOrder] = useState(null);
   const [completedOrder, setCompletedOrder] = useState(null);
@@ -134,15 +143,16 @@ export default function App() {
     setView('payment');
   };
 
-  const finalizeOrder = (paymentMethod) => {
-    const newOrder = {
-      id: `ORD${Math.floor(Math.random() * 89999 + 10000)}`,
-      date: new Date().toLocaleString(),
-      ...pendingOrder,
-      paymentMethod,
-      status: '未付款',
-      appointmentTime: null
-    };
+const finalizeOrder = (paymentMethod, bankLast5 = null) => {
+  const newOrder = {
+    id: `ORD${Math.floor(Math.random() * 89999 + 10000)}`,
+    date: new Date().toLocaleString(),
+    ...pendingOrder,
+    paymentMethod,
+    bankLast5, // 紀錄後五碼
+    status: paymentMethod === '貨到付款' ? '未付款' : '已付款', // 匯款直接變已付款
+    appointmentTime: null
+  };
     setOrders([newOrder, ...orders]);
     setCompletedOrder(newOrder);
     setCart([]);
@@ -223,7 +233,7 @@ export default function App() {
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col border border-stone-100 hover:shadow-md transition-all duration-300 group">
         <div className="cursor-pointer flex flex-col flex-1" onClick={() => { setSelectedProduct(product); setView('productDetail'); }}>
           <div className="aspect-[4/5] w-full overflow-hidden bg-stone-50 relative">
-            <ProductGraphic type={product.iconType} />
+            {product.image ? <img src={product.image} className="w-full h-full object-cover"/> : <ProductGraphic type="box" />}
             <div className="absolute inset-0 bg-stone-900/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                <span className="bg-white/95 text-stone-700 text-xs px-3 py-1.5 rounded-full tracking-wider font-light shadow-sm">查看詳情</span>
             </div>
@@ -303,7 +313,7 @@ export default function App() {
         
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 overflow-hidden flex flex-col md:flex-row">
           <div className="w-full md:w-1/2 aspect-square bg-stone-50">
-            <ProductGraphic type={selectedProduct.iconType} />
+            {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-cover"/> : <ProductGraphic type="box"/>}
           </div>
           <div className="w-full md:w-1/2 p-6 md:p-8 flex flex-col">
             <span className="text-[10px] font-medium text-[#A6907C] tracking-widest mb-3 bg-[#FAF6F0] px-2.5 py-1 rounded-full self-start">{selectedProduct.category || '一般商品'}</span>
@@ -515,7 +525,7 @@ export default function App() {
                   <div key={idx} className="flex justify-between items-start text-xs">
                     <div className="flex gap-3">
                       <div className="w-10 h-12 rounded-lg bg-white border border-stone-100 flex-shrink-0 overflow-hidden">
-                        <ProductGraphic type={item.iconType}/>
+                        {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-cover"/> : <ProductGraphic type="box" />}
                       </div>
                       <div className="min-w-0">
                         <div className="text-stone-700 truncate font-normal">{item.name}</div>
@@ -548,54 +558,45 @@ export default function App() {
     );
   };
 
-  const PaymentView = () => {
-    if (!pendingOrder) return null;
+const PaymentView = () => {
+  if (!pendingOrder) return null;
+  const [selectedMethod, setSelectedMethod] = useState('');
+  const [bankLast5, setBankLast5] = useState('');
 
-    const paymentMethods = [
-      { id: 'cod', name: '貨到付款', icon: <Truck size={16} />, desc: '商品送達時以現金支付' },
-      { id: 'bank', name: '銀行匯款', icon: <Banknote size={16} />, desc: '透過轉帳或匯款完成支付，後續提供後五碼核對' },
-      { id: 'ecpay', name: '綠界科技 Ecpay', icon: <CreditCard size={16} />, desc: '安全金流，支援信用卡、ATM、超商代碼付款' }
-    ];
+  const paymentMethods = [
+    { id: 'cod', name: '貨到付款', icon: <Truck size={20} />, desc: '商品送達時以現金支付' },
+    { id: 'bank', name: '銀行匯款', icon: <Banknote size={20} />, desc: '請匯款後填寫帳號後五碼以利核對' },
+    { id: 'ecpay', name: '線上刷卡', icon: <CreditCard size={20} />, desc: '安全金流，支援信用卡付款' }
+  ];
 
-    return (
-      <div className="max-w-xl mx-auto px-4 py-12">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-10 h-10 bg-[#D3C4B7] text-white rounded-full mb-3.5 shadow-sm">
-            <Wallet size={18} />
-          </div>
-          <h2 className="text-base font-medium tracking-widest text-stone-700">選擇付款方式</h2>
-          <p className="text-xs text-stone-400 tracking-wide mt-2">您的應付總金額為 <span className="font-medium text-[#A6907C] text-sm sm:text-base">NT$ {pendingOrder.totalAmount}</span></p>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-stone-100">
-          <div className="space-y-3">
-            {paymentMethods.map(method => (
-              <button 
-                key={method.id}
-                onClick={() => finalizeOrder(method.name)}
-                className="w-full flex items-center gap-4 p-4 border border-stone-100 rounded-2xl hover:border-[#A6907C] hover:bg-[#FAF6F0] transition-all text-left group"
-              >
-                <div className="text-stone-400 group-hover:text-[#A6907C] bg-stone-50 group-hover:bg-white p-2 rounded-xl transition-colors">
-                  {method.icon}
-                </div>
-                <div>
-                  <h4 className="font-medium text-stone-700 text-xs tracking-wide">{method.name}</h4>
-                  <p className="text-[11px] text-stone-400 font-light mt-0.5">{method.desc}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-          
-          <button 
-            onClick={() => setView('checkout')}
-            className="w-full mt-6 text-stone-400 hover:text-stone-600 text-xs tracking-wider py-1 text-center block transition-colors"
-          >
-            返回修改訂單資訊
-          </button>
-        </div>
-      </div>
-    );
+  const handleConfirmPayment = () => {
+    if (!selectedMethod) return alert('請選擇付款方式！');
+    if (selectedMethod === '銀行匯款' && bankLast5.length !== 5) return alert('選擇銀行匯款請務必填寫帳號後五碼！');
+    finalizeOrder(selectedMethod, selectedMethod === '銀行匯款' ? bankLast5 : null);
   };
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-12">
+      <h2 className="text-lg font-bold text-gray-800 mb-6 text-center">應付總額: NT$ {pendingOrder.totalAmount}</h2>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+        {paymentMethods.map(method => (
+          <div key={method.id} className={`border rounded-xl transition-all ${selectedMethod === method.name ? 'border-[#A6907C] bg-[#F5EFE6]' : 'border-gray-200'}`}>
+            <button onClick={() => setSelectedMethod(method.name)} className="w-full flex items-center gap-4 p-4 text-left">
+              <div className="text-gray-400">{method.icon}</div>
+              <div><h4 className="font-bold text-sm">{method.name}</h4><p className="text-xs text-gray-500">{method.desc}</p></div>
+            </button>
+            {selectedMethod === '銀行匯款' && method.id === 'bank' && (
+              <div className="px-4 pb-4">
+                <input type="text" maxLength="5" placeholder="請輸入匯款帳號後五碼" className="w-full text-sm border p-2 rounded focus:ring-[#A6907C]" value={bankLast5} onChange={e => setBankLast5(e.target.value.replace(/\D/g, ''))} />
+              </div>
+            )}
+          </div>
+        ))}
+        <button onClick={handleConfirmPayment} className="w-full bg-[#4A4A4A] text-white py-3 rounded-lg font-bold mt-4">確認付款並建立訂單</button>
+      </div>
+    </div>
+  );
+};
 
   const OrderSuccessView = () => {
     if (!completedOrder) return null;
@@ -855,9 +856,23 @@ export default function App() {
   };
 
   const AdminView = () => {
-    const [tab, setTab] = useState('orders'); 
-    
-    const [newProduct, setNewProduct] = useState({ name: '', price: '', desc: '', detail: '', category: categories[1] || '' });
+  const [passwordInput, setPasswordInput] = useState('');
+  if (!isAdminLoggedIn) {
+    return (
+      <div className="max-w-sm mx-auto py-20 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border">
+          <h2 className="text-lg font-bold mb-4">請輸入後台密碼</h2>
+          <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full border p-2 rounded mb-4 text-center" placeholder="輸入 1510" />
+          <button onClick={() => passwordInput === '1510' ? setIsAdminLoggedIn(true) : alert('密碼錯誤')} className="w-full bg-[#A6907C] text-white py-2 rounded">登入</button>
+        </div>
+      </div>
+    );
+  }
+
+  const [tab, setTab] = useState('orders'); 
+
+  // 加上 image 欄位
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', desc: '', detail: '', category: categories[1] || '', image: '' });
     const [spec1Name, setSpec1Name] = useState('');
     const [spec1Options, setSpec1Options] = useState('');
     const [spec2Name, setSpec2Name] = useState('');
@@ -882,16 +897,16 @@ export default function App() {
       }
 
       const productToAdd = {
-        id: Date.now(),
-        name: newProduct.name,
-        price: parseInt(newProduct.price),
-        desc: newProduct.desc,
-        detail: newProduct.detail || newProduct.desc,
-        category: newProduct.category || '未分類',
-        specs: specsArray,
-        stock: 10,
-        iconType: 'box'
-      };
+    id: Date.now(),
+    name: newProduct.name,
+    price: parseInt(newProduct.price),
+    desc: newProduct.desc,
+    detail: newProduct.detail || newProduct.desc,
+    category: newProduct.category || '未分類',
+    specs: specsArray,
+    stock: 10,
+    image: newProduct.image // 儲存網址
+  };
       setProducts([productToAdd, ...products]);
       setNewProduct({ name: '', price: '', desc: '', detail: '', category: categories[1] || '' });
       setSpec1Name('');
@@ -1033,7 +1048,10 @@ export default function App() {
             <div className="lg:col-span-1">
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
                 <h3 className="font-medium text-stone-700 mb-4 flex items-center gap-1.5 border-b pb-3 tracking-wider"><Plus size={14} className="text-[#A6907C]"/> 新增商品</h3>
-                <form onSubmit={handleAddProduct} className="space-y-3">
+                <form onSubmit={handleAddProduct} className="space-y-3"><div>
+  <label className="text-[10px] font-medium text-gray-500">商品圖片網址 (URL)</label>
+  <input type="url" placeholder="貼上圖片網址" className="w-full border-gray-300 shadow-sm p-2 rounded-md" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} />
+</div>
                   <div>
                     <label className="text-[10px] text-stone-400 block mb-1">商品名稱 *</label>
                     <input required className="w-full border-stone-200 rounded-xl p-2 bg-stone-50/50 focus:ring-1 focus:ring-[#A6907C]" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
