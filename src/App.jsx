@@ -150,7 +150,7 @@ export default function App() {
           <input 
             type="password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} 
             className="w-full border border-[#D9D0CF] p-3 rounded-xl mb-4 text-center focus:border-[#6B5A59] outline-none text-[#6B5A59] font-bold" 
-            placeholder="輸入 1510" 
+            placeholder="輸入密碼進入後台" 
           />
           <button 
             onClick={() => adminPassword === '1510' ? setIsAdminLoggedIn(true) : alert('密碼錯誤')} 
@@ -349,9 +349,13 @@ export default function App() {
                     <hr className="border-[#F0E4E4] my-4" />
                     <div>
                       <p className="font-bold mb-1">🤎須知</p>
-                      <p>❶設計免費（如需耗時較長酌收$30～50不等）</p>
-                      <p>❷可印彩色or黑白 / 可只印一張</p>
-                      <p>❸風格、樣式可以討論</p>
+                     <p>❶設計免費（如需耗時較長酌收$30～50不等）</p>
+ <p>❷可印彩色or黑白</p>
+ <p>❸可只印一張</p>
+ <p>❹風格、樣式可以討論</p>
+ <p>❺可面交.到店取貨</p>
+
+
                     </div>
                     <hr className="border-[#F0E4E4] my-4" />
                     <div>
@@ -444,16 +448,21 @@ export default function App() {
                     <div>
                       <p className="font-bold mb-1">🤎合作方式 / 推廣</p>
                       <p>❶我們提供分潤連結</p>
-                      <p>❷您自由選擇平台分享→顧客購買 → 獲利</p>
+                      <p>❷您自由選擇平台分享→顧客購買 → 獲得分潤</p>
                       <p>❸合作期限：1 個月 （可續約）</p>
+<p>❹由我們出貨</p>
                     </div>
                     <hr className="border-[#F0E4E4] my-4" />
                     <div>
                       <p className="font-bold mb-1">🤎分潤連結</p>
-                      <p>❶導入 NA shop 官網進行下單</p>
-                      <p>❷分潤計算：下單總金額 x 30% 分潤</p>
+                      <p>❶客人會直接導入到NA shop官網進行下單</p>
+                      <p>❷下單會有電子郵件通知合作夥伴</p>
+<p>❸分潤計算：下單總金額 x 30% 分潤</p>
                       <p className="mt-2 text-[#8C7A79] text-[13px]">
-                        （例如下單500*30%=您獲得150）
+                        （例如下單500*30%=您獲得150）</p>（客人點選分潤連結下單的任意商品皆算入
+總金額內)
+
+
                       </p>
                     </div>
                   </div>
@@ -656,23 +665,11 @@ export default function App() {
         <main className="max-w-2xl mx-auto px-4 mt-8 animate-fade-in">
            <div className="bg-white rounded-[2rem] p-6 sm:p-10 shadow-sm border border-[#F0E4E4]">
              
-             {/* 專屬連結複製區塊 */}
-             <div className="bg-[#F8EDED] p-4 rounded-xl mb-8 flex justify-between items-center border border-[#F0E4E4] shadow-sm">
-               <div className="text-[13px] text-[#8C7A79]">
-                 <p className="font-bold text-[#6B5A59] mb-1 flex items-center gap-1.5"><Link size={14}/> 專屬查詢連結</p>
-                 <p>您可以將此畫面網址直接傳送給客人</p>
-               </div>
-               <button 
-                 onClick={() => handleCopy(`${window.location.origin}/?view=lookup`, 'lookup_link')}
-                 className="bg-white border border-[#D9D0CF] hover:bg-[#F0E4E4] text-[#6B5A59] px-4 py-2 rounded-lg text-[13px] font-bold transition-colors shrink-0"
-               >
-                 {copiedId === 'lookup_link' ? '已複製' : '複製連結'}
-               </button>
-             </div>
+            
 
              <div className="flex justify-between items-center mb-6">
                 <h2 className="text-[18px] font-bold text-[#6B5A59] flex items-center gap-2">
-                  <Search size={20} /> 查詢您的訂單
+                  <Search size={20} /> 請依類型查詢訂單
                 </h2>
                 <button onClick={() => setView('main')} className="text-[#8C7A79] hover:text-[#6B5A59] text-[13px] font-bold">返回首頁</button>
              </div>
