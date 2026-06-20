@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink, Search, Truck, Banknote, ClipboardCheck, ArrowLeft } from 'lucide-react';
+import { Copy, Check, ExternalLink, Search, Truck, Banknote, ClipboardCheck, ArrowLeft, Settings, Calendar, Link } from 'lucide-react';
 
-// 卡紙範例圖片庫 (包含新增的圖片)
 const galleryImages = [
   "https://bio.linkcdn.cc/upload/6072019vugjps/2026061917/178188955800089163.jpg",
   "https://bio.linkcdn.cc/upload/6072019vugjps/2026061917/178188956700026933.jpg",
@@ -20,56 +19,72 @@ export default function App() {
   const [copiedId, setCopiedId] = useState(null);
   const [activeTab, setActiveTab] = useState('wholesale');
   
-  // 畫面控制：main (主頁), checkout (填寫資料), payment (付款), success (成功), lookup (查詢)
-  const [view, setView] = useState('main');
+  // 畫面控制：根據網址參數判斷初始畫面，若無則顯示 main
+  const [view, setView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('view') || 'main';
+    }
+    return 'main';
+  });
 
-  // 訂單資料庫 (使用 LocalStorage 永久記憶)
+  // 當畫面改變時，自動更新網址，讓連結可以單獨分享
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location);
+      if (view === 'main') {
+        url.searchParams.delete('view');
+      } else {
+        url.searchParams.set('view', view);
+      }
+      window.history.pushState({}, '', url);
+    }
+  }, [view]);
+
+  // 後台登入狀態
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+
+  // 訂單資料庫
   const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('na_design_orders')) || []);
   useEffect(() => {
     localStorage.setItem('na_design_orders', JSON.stringify(orders));
   }, [orders]);
 
   // 下單暫存狀態
-  const [pendingDesignOrder, setPendingDesignOrder] = useState({
-    type: '設計+影印',
-    quantity: 1,
-    remark: ''
-  });
-  
+  const [pendingDesignOrder, setPendingDesignOrder] = useState({ type: '設計+影印', quantity: 1, remark: '' });
   const [checkoutForm, setCheckoutForm] = useState({ name: '', phone: '' });
   const [shippingMethod, setShippingMethod] = useState('store');
   const [address, setAddress] = useState('');
-  
   const [paymentMethod, setPaymentMethod] = useState('');
-  const [bankFirst3, setBankFirst3] = useState(''); // 匯款前三碼
+  const [bankFirst3, setBankFirst3] = useState('');
   const [completedOrder, setCompletedOrder] = useState(null);
 
-  // 查詢系統狀態
+  // 查詢與預約系統狀態
+  const [lookupType, setLookupType] = useState('design'); // 查詢類型：design 或 wholesale
   const [searchPhone, setSearchPhone] = useState('');
   const [searchResults, setSearchResults] = useState(null);
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingSlot, setBookingSlot] = useState('13:00-14:00');
 
-  // 一鍵複製功能
   const handleCopy = (text, id) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // 進入結帳頁面
   const handleStartOrder = () => {
     setView('checkout');
     window.scrollTo(0, 0);
   };
 
-  // 提交配送資料，進入付款頁面
   const handleCheckoutSubmit = (e) => {
     e.preventDefault();
     let finalAddress = address;
     if (shippingMethod === 'store') finalAddress = SHIPPING_OPTIONS['store'].desc;
     if (!finalAddress) return alert('請填寫完整取貨資訊！');
 
-    const totalAmount = (pendingDesignOrder.quantity * 6) + SHIPPING_OPTIONS[shippingMethod].fee; // 基礎金額計算 (1張A6=6元)
-    
+    const totalAmount = (pendingDesignOrder.quantity * 6) + SHIPPING_OPTIONS[shippingMethod].fee;
     setPendingDesignOrder(prev => ({
       ...prev,
       customer: checkoutForm,
@@ -80,7 +95,6 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // 確認付款，正式成立訂單
   const handleConfirmPayment = () => {
     if (!paymentMethod) return alert('請選擇付款方式！');
     if (paymentMethod === '銀行匯款' && bankFirst3.length !== 3) {
@@ -94,6 +108,7 @@ export default function App() {
       paymentMethod,
       bankFirst3: paymentMethod === '銀行匯款' ? bankFirst3 : null,
       status: paymentMethod === '銀行匯款' ? '已付款 (待確認)' : '未付款 (貨到付款)',
+      appointmentTime: null
     };
 
     setOrders([newOrder, ...orders]);
@@ -104,13 +119,120 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // 搜尋訂單
   const executeSearch = (e) => {
     e.preventDefault();
     if (!searchPhone.trim()) return;
     const results = orders.filter(o => o.customer.phone === searchPhone.trim());
     setSearchResults(results);
   };
+
+  const handleBookingSubmit = (orderId) => {
+    if (!bookingDate) return alert('請選擇預約日期');
+    const formattedTime = `${bookingDate} ${bookingSlot}`;
+    
+    const updatedOrders = orders.map(o => o.id === orderId ? { ...o, status: '已約定', appointmentTime: formattedTime } : o);
+    setOrders(updatedOrders);
+    setSearchResults(updatedOrders.filter(o => o.customer.phone === searchPhone.trim()));
+    alert(`預約成功！時間為：${formattedTime}`);
+    setBookingDate('');
+  };
+
+  const handleUpdateOrderStatus = (orderId, newStatus) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+  };
+
+  // --- 後台登入畫面 ---
+  if (view === 'admin' && !isAdminLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#F8EDED] flex items-center justify-center px-4">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-[#F0E4E4] max-w-sm w-full">
+          <h2 className="text-lg font-bold text-[#6B5A59] mb-4 text-center">請輸入後台密碼</h2>
+          <input 
+            type="password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} 
+            className="w-full border border-[#D9D0CF] p-3 rounded-xl mb-4 text-center focus:border-[#6B5A59] outline-none text-[#6B5A59] font-bold" 
+            placeholder="輸入 1510" 
+          />
+          <button 
+            onClick={() => adminPassword === '1510' ? setIsAdminLoggedIn(true) : alert('密碼錯誤')} 
+            className="w-full bg-[#6B5A59] text-white py-3 rounded-xl font-bold"
+          >
+            登入
+          </button>
+          <button onClick={() => setView('main')} className="w-full mt-4 text-[#8C7A79] font-bold text-sm">返回首頁</button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 後台管理畫面 ---
+  if (view === 'admin' && isAdminLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#F8EDED] p-4 sm:p-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-[#6B5A59]">📦 訂單管理系統</h2>
+            <button onClick={() => setView('main')} className="bg-white px-4 py-2 rounded-lg text-[#6B5A59] font-bold shadow-sm border border-[#F0E4E4]">返回前台</button>
+          </div>
+          
+          <div className="bg-white rounded-2xl shadow-sm border border-[#F0E4E4] overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[800px]">
+              <thead className="bg-[#F8EDED] text-[#8C7A79] border-b border-[#F0E4E4]">
+                <tr>
+                  <th className="p-4 font-bold">單號 / 日期</th>
+                  <th className="p-4 font-bold">顧客資訊</th>
+                  <th className="p-4 font-bold">訂購內容</th>
+                  <th className="p-4 font-bold">物流 / 付款</th>
+                  <th className="p-4 font-bold">預約時間</th>
+                  <th className="p-4 font-bold">狀態更改</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0E4E4] text-[#6B5A59]">
+                {orders.length === 0 ? (
+                  <tr><td colSpan="6" className="p-8 text-center text-[#8C7A79]">尚無訂單</td></tr>
+                ) : (
+                  orders.map(order => (
+                    <tr key={order.id} className="hover:bg-stone-50">
+                      <td className="p-4">
+                        <div className="font-bold">{order.id}</div>
+                        <div className="text-[11px] text-[#8C7A79]">{order.date}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="font-bold">{order.customer.name}</div>
+                        <div className="text-[#8C7A79]">{order.customer.phone}</div>
+                      </td>
+                      <td className="p-4 text-[13px]">
+                        <span className="font-bold">{order.type}</span> x{order.quantity}<br/>
+                        <span className="text-[#8C7A79]">{order.remark}</span>
+                      </td>
+                      <td className="p-4 text-[13px]">
+                        <div><span className="font-bold">{SHIPPING_OPTIONS[order.shipping.method]?.name}</span></div>
+                        <div className="text-[#8C7A79] truncate max-w-[150px]">{order.shipping.address}</div>
+                        <div className="mt-1 font-bold text-[#D98282]">{order.paymentMethod} {order.bankFirst3 && `(前3碼:${order.bankFirst3})`}</div>
+                      </td>
+                      <td className="p-4 text-[13px] font-bold">
+                        {order.appointmentTime ? <span className="text-[#6B5A59]">{order.appointmentTime}</span> : <span className="text-[#B09F9E]">尚未預約</span>}
+                      </td>
+                      <td className="p-4">
+                        <select
+                          value={order.status}
+                          onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                          className="border border-[#D9D0CF] rounded-lg px-2 py-1 text-xs font-bold text-[#6B5A59] focus:outline-none"
+                        >
+                          {['未付款 (貨到付款)', '已付款 (待確認)', '製作中', '可預約', '已約定', '已出貨', '已完成'].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8EDED] font-sans text-[#6B5A59] pb-20 selection:bg-[#E6D5D5] selection:text-[#6B5A59]">
@@ -125,12 +247,17 @@ export default function App() {
              <span className="font-bold tracking-wider text-[#6B5A59]">NA Shop 151</span>
           </div>
           
-          <button 
-            onClick={() => { setView('lookup'); setSearchResults(null); setSearchPhone(''); }} 
-            className="flex items-center gap-1.5 text-[13px] font-bold text-[#8C7A79] bg-[#F8EDED] hover:bg-[#F0E4E4] px-3 py-1.5 rounded-full transition-colors"
-          >
-            <Search size={14} /> 查詢訂單
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setView('admin')} className="text-[#B09F9E] hover:text-[#6B5A59] transition-colors p-1">
+              <Settings size={18} />
+            </button>
+            <button 
+              onClick={() => { setView('lookup'); setSearchResults(null); setSearchPhone(''); setLookupType('design'); window.scrollTo(0,0); }} 
+              className="flex items-center gap-1.5 text-[13px] font-bold text-[#8C7A79] bg-[#F8EDED] hover:bg-[#F0E4E4] px-3 py-1.5 rounded-full transition-colors"
+            >
+              <Search size={14} /> 查詢訂單
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -139,7 +266,6 @@ export default function App() {
       ========================================================= */}
       {view === 'main' && (
         <>
-          {/* 頂部 Tabs */}
           <div className="max-w-3xl mx-auto px-2 mt-8 mb-6">
             <div className="flex justify-center gap-4 sm:gap-8 border-b border-[#E6D5D5] overflow-x-auto whitespace-nowrap scrollbar-none">
               {['wholesale', 'design', 'share'].map(tab => (
@@ -202,7 +328,7 @@ export default function App() {
                 <div className="animate-fade-in">
                   <h3 className="text-[20px] font-bold text-[#6B5A59] mb-4">卡紙設計/代印服務</h3>
                   
-                  {/* --- ✨ 滑動式卡紙範例圖 --- */}
+                  {/* 滑動式卡紙範例圖 */}
                   <div className="mb-8 overflow-hidden rounded-2xl border border-[#F0E4E4] bg-[#F8EDED]/50 py-4">
                     <p className="font-bold text-[#6B5A59] text-center mb-3">🤍 卡紙範例圖 (左右滑動查看)</p>
                     <div className="flex overflow-x-auto gap-4 px-4 snap-x snap-mandatory pb-4" style={{ scrollbarWidth: 'none' }}>
@@ -215,6 +341,12 @@ export default function App() {
                   </div>
 
                   <div className="text-[15px] leading-relaxed text-[#6B5A59] space-y-4 mb-8">
+                    <div className="font-bold space-y-1">
+                      <p>【▫️設計+影印】</p>
+                      <p>OR</p>
+                      <p>【▫️代印服務- 您自行設計·我們印出】</p>
+                    </div>
+                    <hr className="border-[#F0E4E4] my-4" />
                     <div>
                       <p className="font-bold mb-1">🤎須知</p>
                       <p>❶設計免費（如需耗時較長酌收$30～50不等）</p>
@@ -233,9 +365,32 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* ✨ 直接下單區塊 */}
+                  {/* 🚨 Step 2: 複製表單 */}
+                  <div className="bg-[#FDF8F8] rounded-2xl p-5 border border-[#E6D5D5] mb-6">
+                    <span className="font-bold text-[#6B5A59] block mb-3 text-[16px]">〰️ Step 2: 請先複製表單至 Line 回覆與我們討論</span>
+                    
+                    <div className="space-y-3 mb-4">
+                      <button 
+                        onClick={() => handleCopy("【影印+設計】\n❶ 喜歡何種風格/元素、預計卡紙尺寸：\n❷ 卡紙用途、印幾張：\n❸ 電子郵件、電話：\n❹ 想要如何交貨（711、到店取貨、面交）：", 'design')}
+                        className="w-full bg-white hover:bg-[#F0E4E4] border border-[#E6D5D5] text-[#6B5A59] text-[14px] py-3 px-4 rounded-xl flex items-center justify-between transition-colors font-bold text-left shadow-sm"
+                      >
+                        <span>複製【影印+設計】表單</span>
+                        {copiedId === 'design' ? <Check size={16} className="text-emerald-500"/> : <Copy size={16} className="text-[#B09F9E]"/>}
+                      </button>
+
+                      <button 
+                        onClick={() => handleCopy("【代印服務】\n❶ 影印設計圖、印幾張：\n❷ 電子郵件、電話：\n❸ 想要如何交貨（711、到店取貨、面交）：", 'print')}
+                        className="w-full bg-white hover:bg-[#F0E4E4] border border-[#E6D5D5] text-[#6B5A59] text-[14px] py-3 px-4 rounded-xl flex items-center justify-between transition-colors font-bold text-left shadow-sm"
+                      >
+                        <span>複製【代印服務】表單</span>
+                        {copiedId === 'print' ? <Check size={16} className="text-emerald-500"/> : <Copy size={16} className="text-[#B09F9E]"/>}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 🚨 Step 3: 直接下單 */}
                   <div className="bg-[#F8EDED] rounded-2xl p-5 border border-[#F0E4E4]">
-                    <span className="font-bold text-[#6B5A59] block mb-4 text-[16px]">〰️ Step 2: 選擇規格並直接下單</span>
+                    <span className="font-bold text-[#6B5A59] block mb-4 text-[16px]">〰️ Step 3: 討論完畢後，選擇規格並下單</span>
                     
                     <div className="space-y-4 mb-6">
                       <div>
@@ -327,7 +482,7 @@ export default function App() {
           填寫結帳資料 (Checkout)
       ========================================================= */}
       {view === 'checkout' && (
-        <main className="max-w-2xl mx-auto px-4 mt-8">
+        <main className="max-w-2xl mx-auto px-4 mt-8 animate-fade-in">
           <button onClick={() => setView('main')} className="flex items-center gap-1 text-[#8C7A79] hover:text-[#6B5A59] font-bold mb-6 text-[14px]">
             <ArrowLeft size={16} /> 返回修改項目
           </button>
@@ -340,17 +495,17 @@ export default function App() {
             <form onSubmit={handleCheckoutSubmit} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[13px] font-bold text-[#8C7A79] mb-1.5">收件人姓名</label>
+                  <label className="block text-[13px] font-bold text-[#8C7A79] mb-1.5">收件人姓名 *</label>
                   <input required type="text" className="w-full border border-[#D9D0CF] rounded-xl p-3 focus:border-[#6B5A59] outline-none font-bold text-[#6B5A59]" value={checkoutForm.name} onChange={e => setCheckoutForm({...checkoutForm, name: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-[13px] font-bold text-[#8C7A79] mb-1.5">聯絡電話 (供查詢用)</label>
+                  <label className="block text-[13px] font-bold text-[#8C7A79] mb-1.5">聯絡電話 (供查詢用) *</label>
                   <input required type="tel" className="w-full border border-[#D9D0CF] rounded-xl p-3 focus:border-[#6B5A59] outline-none font-bold text-[#6B5A59]" value={checkoutForm.phone} onChange={e => setCheckoutForm({...checkoutForm, phone: e.target.value})} />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[13px] font-bold text-[#8C7A79] mb-3">選擇取貨與物流方式</label>
+                <label className="block text-[13px] font-bold text-[#8C7A79] mb-3">選擇取貨與物流方式 *</label>
                 <div className="space-y-3">
                   {Object.entries(SHIPPING_OPTIONS).map(([key, opt]) => (
                     <label key={key} className={`flex flex-col p-4 border rounded-xl cursor-pointer transition-all ${shippingMethod === key ? 'border-[#6B5A59] bg-[#F8EDED]' : 'border-[#F0E4E4] hover:bg-stone-50'}`}>
@@ -395,7 +550,7 @@ export default function App() {
           付款頁面 (Payment)
       ========================================================= */}
       {view === 'payment' && (
-        <main className="max-w-2xl mx-auto px-4 mt-8">
+        <main className="max-w-2xl mx-auto px-4 mt-8 animate-fade-in">
           <button onClick={() => setView('checkout')} className="flex items-center gap-1 text-[#8C7A79] hover:text-[#6B5A59] font-bold mb-6 text-[14px]">
             <ArrowLeft size={16} /> 返回上一步
           </button>
@@ -495,62 +650,159 @@ export default function App() {
       )}
 
       {/* =========================================================
-          查詢訂單 (Lookup)
+          查詢訂單 (Lookup) - 全新分離介面 + 網址專屬連結功能
       ========================================================= */}
       {view === 'lookup' && (
         <main className="max-w-2xl mx-auto px-4 mt-8 animate-fade-in">
            <div className="bg-white rounded-[2rem] p-6 sm:p-10 shadow-sm border border-[#F0E4E4]">
-             <h2 className="text-[18px] font-bold text-[#6B5A59] mb-6 flex items-center gap-2">
-               <Search size={20} /> 查詢您的訂單
-             </h2>
-
-             <form onSubmit={executeSearch} className="flex gap-2 mb-8">
-               <input 
-                 type="tel" required placeholder="請輸入您下單時填寫的電話號碼" 
-                 className="flex-grow border border-[#D9D0CF] rounded-xl p-3 focus:border-[#6B5A59] outline-none font-bold text-[#6B5A59]"
-                 value={searchPhone} onChange={e => setSearchPhone(e.target.value)}
-               />
-               <button type="submit" className="bg-[#6B5A59] text-white px-6 rounded-xl font-bold transition-colors whitespace-nowrap">
-                 搜尋
+             
+             {/* 專屬連結複製區塊 */}
+             <div className="bg-[#F8EDED] p-4 rounded-xl mb-8 flex justify-between items-center border border-[#F0E4E4] shadow-sm">
+               <div className="text-[13px] text-[#8C7A79]">
+                 <p className="font-bold text-[#6B5A59] mb-1 flex items-center gap-1.5"><Link size={14}/> 專屬查詢連結</p>
+                 <p>您可以將此畫面網址直接傳送給客人</p>
+               </div>
+               <button 
+                 onClick={() => handleCopy(`${window.location.origin}/?view=lookup`, 'lookup_link')}
+                 className="bg-white border border-[#D9D0CF] hover:bg-[#F0E4E4] text-[#6B5A59] px-4 py-2 rounded-lg text-[13px] font-bold transition-colors shrink-0"
+               >
+                 {copiedId === 'lookup_link' ? '已複製' : '複製連結'}
                </button>
-             </form>
+             </div>
 
-             {searchResults !== null && (
-               <div>
-                 <h3 className="text-[14px] font-bold text-[#8C7A79] mb-4">搜尋結果 ({searchResults.length} 筆)</h3>
-                 
-                 {searchResults.length === 0 ? (
-                   <div className="text-center bg-[#F8EDED] p-8 rounded-2xl text-[#8C7A79] font-bold">
-                     查無此電話的訂單，請確認輸入是否正確。
-                   </div>
-                 ) : (
-                   <div className="space-y-4">
-                     {searchResults.map(order => (
-                       <div key={order.id} className="bg-white border border-[#E6D5D5] p-5 rounded-2xl shadow-sm">
-                         <div className="flex justify-between items-center border-b border-[#F0E4E4] pb-3 mb-3">
-                           <div>
-                             <p className="text-[11px] text-[#8C7A79]">{order.date}</p>
-                             <p className="font-bold text-[#6B5A59]">單號: {order.id}</p>
-                           </div>
-                           <span className="bg-[#F8EDED] text-[#6B5A59] px-3 py-1 rounded-full text-[12px] font-bold border border-[#E6D5D5]">
-                             {order.status}
-                           </span>
-                         </div>
-                         <div className="text-[13px] text-[#6B5A59] space-y-1.5 font-bold">
-                           <p><span className="text-[#8C7A79] font-normal">服務：</span>{order.type} x{order.quantity}</p>
-                           <p><span className="text-[#8C7A79] font-normal">收件：</span>{order.customer.name}</p>
-                           <p><span className="text-[#8C7A79] font-normal">方式：</span>{order.shipping.method === '711' ? '7-11' : order.shipping.method === 'meetup' ? '面交' : '店取'} - {order.shipping.address}</p>
-                           <p><span className="text-[#8C7A79] font-normal">總額：</span>NT$ {order.totalAmount} ({order.paymentMethod})</p>
-                           {order.paymentMethod === '銀行匯款' && (
-                             <p className="text-[#D98282] bg-[#FDF8F8] p-1.5 rounded inline-block mt-1">匯款前3碼：{order.bankFirst3}</p>
-                           )}
-                         </div>
+             <div className="flex justify-between items-center mb-6">
+                <h2 className="text-[18px] font-bold text-[#6B5A59] flex items-center gap-2">
+                  <Search size={20} /> 查詢您的訂單
+                </h2>
+                <button onClick={() => setView('main')} className="text-[#8C7A79] hover:text-[#6B5A59] text-[13px] font-bold">返回首頁</button>
+             </div>
+
+             {/* 選擇要查詢哪一種系統的訂單 */}
+             <div className="flex gap-4 border-b border-[#E6D5D5] mb-8">
+               <button 
+                 onClick={() => setLookupType('design')}
+                 className={`pb-3 px-2 text-[15px] font-bold transition-colors relative ${lookupType === 'design' ? 'text-[#6B5A59]' : 'text-[#B09F9E] hover:text-[#8C7A79]'}`}
+               >
+                 卡紙設計/代印
+                 {lookupType === 'design' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#6B5A59] rounded-t-full"></div>}
+               </button>
+               <button 
+                 onClick={() => setLookupType('wholesale')}
+                 className={`pb-3 px-2 text-[15px] font-bold transition-colors relative ${lookupType === 'wholesale' ? 'text-[#6B5A59]' : 'text-[#B09F9E] hover:text-[#8C7A79]'}`}
+               >
+                 純批發
+                 {lookupType === 'wholesale' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#6B5A59] rounded-t-full"></div>}
+               </button>
+             </div>
+
+             {/* --- 批發查詢區塊 --- */}
+             {lookupType === 'wholesale' && (
+               <div className="text-center bg-[#F8EDED] p-8 rounded-2xl border border-[#F0E4E4] animate-fade-in">
+                 <p className="font-bold text-[#6B5A59] mb-6">請使用您的電子郵件登入批發網站查詢訂單 🔎</p>
+                 <a 
+                   href="https://na-shop-cbcba.web.app/" 
+                   target="_blank" rel="noreferrer" 
+                   className="inline-flex items-center gap-2 bg-[#6B5A59] hover:bg-[#524544] text-white px-6 py-3.5 rounded-xl font-bold transition-colors shadow-sm"
+                 >
+                   前往批發專屬官網 <ExternalLink size={16} />
+                 </a>
+               </div>
+             )}
+
+             {/* --- 卡紙設計查詢區塊 --- */}
+             {lookupType === 'design' && (
+               <div className="animate-fade-in">
+                 <form onSubmit={executeSearch} className="flex gap-2 mb-8">
+                   <input 
+                     type="tel" required placeholder="請輸入下單時的手機號碼" 
+                     className="flex-grow border border-[#D9D0CF] rounded-xl p-3 focus:border-[#6B5A59] outline-none font-bold text-[#6B5A59]"
+                     value={searchPhone} onChange={e => setSearchPhone(e.target.value)}
+                   />
+                   <button type="submit" className="bg-[#6B5A59] text-white px-6 rounded-xl font-bold transition-colors whitespace-nowrap">
+                     搜尋
+                   </button>
+                 </form>
+
+                 {searchResults !== null && (
+                   <div>
+                     <h3 className="text-[14px] font-bold text-[#8C7A79] mb-4">搜尋結果 ({searchResults.length} 筆)</h3>
+                     
+                     {searchResults.length === 0 ? (
+                       <div className="text-center bg-[#F8EDED] p-8 rounded-2xl text-[#8C7A79] font-bold border border-[#F0E4E4]">
+                         查無此電話的訂單，請確認輸入是否正確。
                        </div>
-                     ))}
+                     ) : (
+                       <div className="space-y-4">
+                         {searchResults.map(order => (
+                           <div key={order.id} className="bg-white border border-[#E6D5D5] p-5 rounded-2xl shadow-sm">
+                             <div className="flex justify-between items-center border-b border-[#F0E4E4] pb-3 mb-3">
+                               <div>
+                                 <p className="text-[11px] text-[#8C7A79]">{order.date}</p>
+                                 <p className="font-bold text-[#6B5A59]">單號: {order.id}</p>
+                               </div>
+                               <span className="bg-[#F8EDED] text-[#6B5A59] px-3 py-1 rounded-full text-[12px] font-bold border border-[#E6D5D5]">
+                                 {order.status}
+                               </span>
+                             </div>
+                             
+                             <div className="text-[13px] text-[#6B5A59] space-y-1.5 font-bold">
+                               <p><span className="text-[#8C7A79] font-normal">服務：</span>{order.type} x{order.quantity}</p>
+                               <p><span className="text-[#8C7A79] font-normal">收件：</span>{order.customer.name}</p>
+                               <p><span className="text-[#8C7A79] font-normal">方式：</span>{order.shipping.method === '711' ? '7-11' : order.shipping.method === 'meetup' ? '面交' : '店取'} - {order.shipping.address}</p>
+                               <p><span className="text-[#8C7A79] font-normal">總額：</span>NT$ {order.totalAmount} ({order.paymentMethod})</p>
+                               
+                               {order.paymentMethod === '銀行匯款' && (
+                                 <p className="text-[#D98282] bg-[#FDF8F8] p-1.5 rounded inline-block mt-1">匯款前3碼：{order.bankFirst3}</p>
+                               )}
+                               
+                               {order.appointmentTime && (
+                                 <p className="text-[#6B5A59] bg-[#EFEAE9] p-2 rounded-lg inline-flex items-center gap-1.5 mt-2">
+                                   <Calendar size={14}/> 約定取貨：{order.appointmentTime}
+                                 </p>
+                               )}
+                             </div>
+
+                             {/* 若狀態為可預約，顯示預約時間表單 */}
+                             {order.status === '可預約' && ['store', 'meetup'].includes(order.shipping.method) && (
+                               <div className="mt-4 pt-4 border-t border-[#F0E4E4] bg-[#F8EDED]/50 p-4 rounded-xl">
+                                 <p className="font-bold text-[#6B5A59] text-[13px] mb-3 flex items-center gap-1.5">
+                                   <Calendar size={14}/> 您的訂單已可取貨，請預約時間
+                                 </p>
+                                 <div className="grid grid-cols-2 gap-3 mb-3">
+                                   <input 
+                                     type="date" required
+                                     className="w-full border border-[#D9D0CF] rounded-lg p-2 text-[12px] font-bold text-[#6B5A59] outline-none"
+                                     value={bookingDate} onChange={e => setBookingDate(e.target.value)}
+                                   />
+                                   <select 
+                                     className="w-full border border-[#D9D0CF] rounded-lg p-2 text-[12px] font-bold text-[#6B5A59] outline-none"
+                                     value={bookingSlot} onChange={e => setBookingSlot(e.target.value)}
+                                   >
+                                     <option value="11:00-12:00">11:00 - 12:00</option>
+                                     <option value="13:00-14:00">13:00 - 14:00</option>
+                                     <option value="14:00-15:00">14:00 - 15:00</option>
+                                     <option value="15:00-16:00">15:00 - 16:00</option>
+                                     <option value="17:00-18:00">17:00 - 18:00</option>
+                                     <option value="19:00-20:00">19:00 - 20:00 (限面交)</option>
+                                   </select>
+                                 </div>
+                                 <button 
+                                   onClick={() => handleBookingSubmit(order.id)}
+                                   className="w-full bg-[#6B5A59] hover:bg-[#524544] text-white font-bold py-2 rounded-lg text-[13px] transition-colors shadow-sm"
+                                 >
+                                   確認預約時間
+                                 </button>
+                               </div>
+                             )}
+                           </div>
+                         ))}
+                       </div>
+                     )}
                    </div>
                  )}
                </div>
              )}
+             
            </div>
         </main>
       )}
