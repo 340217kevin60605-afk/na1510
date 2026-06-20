@@ -458,13 +458,11 @@ export default function App() {
                       <p>❶客人會直接導入到NA shop官網進行下單</p>
                       <p>❷下單會有電子郵件通知合作夥伴</p>
 <p>❸分潤計算：下單總金額 x 30% 分潤</p>
-                      <p className="mt-2 text-[#8C7A79] text-[13px]">
-                        （例如下單500*30%=您獲得150）</p>（客人點選分潤連結下單的任意商品皆算入
-總金額內)
-
-
-                      </p>
-                    </div>
+                     <p className="mt-2 text-[#8C7A79] text-[13px]">
+    （例如下單500*30%=您獲得150）<br/>
+    （客人點選分潤連結下單的任意商品皆算入總金額內）
+  </p>
+</div>
                   </div>
 
                   <div className="bg-[#F8EDED] rounded-2xl p-5 border border-[#F0E4E4]">
