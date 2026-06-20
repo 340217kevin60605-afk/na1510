@@ -284,7 +284,7 @@ export default function App() {
           </div>
 
           <main className="max-w-2xl mx-auto px-4">
-          className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-10 shadow-sm border border-[#F0E4E4]"
+            <div className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-10 shadow-sm border border-[#F0E4E4]">
               <div className="text-center font-bold text-[#8C7A79] text-[15px] tracking-wider mb-8">
                 Step1:請先查看詳情 🔎 選方案
               </div>
@@ -494,7 +494,7 @@ export default function App() {
             <ArrowLeft size={16} /> 返回修改項目
           </button>
           
-          <div className="bg-white rounded-[2rem] p-6 sm:p-10 shadow-sm border border-[#F0E4E4]">
+          <div className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-10 shadow-sm border border-[#F0E4E4]">
             <h2 className="text-[18px] font-bold text-[#6B5A59] mb-6 flex items-center gap-2 border-b border-[#F0E4E4] pb-4">
               <Truck size={20} /> 填寫收件資訊
             </h2>
@@ -562,7 +562,7 @@ export default function App() {
             <ArrowLeft size={16} /> 返回上一步
           </button>
 
-          <div className="bg-white rounded-[2rem] p-6 sm:p-10 shadow-sm border border-[#F0E4E4]">
+          <div className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-10 shadow-sm border border-[#F0E4E4]">
              <h2 className="text-[18px] font-bold text-[#6B5A59] mb-2 text-center">結帳總額：NT$ {pendingDesignOrder.totalAmount}</h2>
              <p className="text-center text-[#8C7A79] text-[13px] mb-8 border-b border-[#F0E4E4] pb-6">請選擇付款方式以完成訂單</p>
 
