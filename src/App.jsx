@@ -235,7 +235,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8EDED] font-sans text-[#6B5A59] pb-20 selection:bg-[#E6D5D5] selection:text-[#6B5A59]">
+    <div className="min-h-screen bg-[#F8EDED] font-sans tracking-wide text-[#6B5A59] pb-20 selection:bg-[#E6D5D5] selection:text-[#6B5A59]">
       
       {/* --- 頂部導覽列 --- */}
       <nav className="bg-white/80 backdrop-blur-md border-b border-[#F0E4E4] sticky top-0 z-40">
@@ -267,15 +267,15 @@ export default function App() {
       {view === 'main' && (
         <>
           <div className="max-w-3xl mx-auto px-2 mt-8 mb-6">
-            <div className="flex justify-center gap-4 sm:gap-8 border-b border-[#E6D5D5] overflow-x-auto whitespace-nowrap scrollbar-none">
-              {['wholesale', 'design', 'share'].map(tab => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`pb-3 px-2 text-[16px] sm:text-[17px] font-bold flex items-center transition-colors relative ${
-                    activeTab === tab ? 'text-[#6B5A59]' : 'text-[#B09F9E] hover:text-[#8C7A79]'
-                  }`}
-                >
+           <div className="flex justify-center gap-2 sm:gap-8 border-b border-[#E6D5D5] overflow-x-auto whitespace-nowrap scrollbar-none px-2">
+  {['wholesale', 'design', 'share'].map(tab => (
+    <button 
+      key={tab}
+      onClick={() => setActiveTab(tab)}
+      className={`pb-3 px-3 text-[15px] sm:text-[17px] font-medium flex items-center transition-colors relative ${
+        activeTab === tab ? 'text-[#6B5A59] font-bold' : 'text-[#B09F9E] hover:text-[#8C7A79]'
+      }`}
+    >
                   {tab === 'wholesale' ? '純批發' : tab === 'design' ? '卡紙設計/代印' : '社群分潤'}
                   {activeTab === tab && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#6B5A59] rounded-t-full"></div>}
                 </button>
@@ -284,7 +284,7 @@ export default function App() {
           </div>
 
           <main className="max-w-2xl mx-auto px-4">
-            <div className="bg-white rounded-[2rem] p-6 sm:p-10 shadow-sm border border-[#F0E4E4]">
+          className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-10 shadow-sm border border-[#F0E4E4]"
               <div className="text-center font-bold text-[#8C7A79] text-[15px] tracking-wider mb-8">
                 Step1:請先查看詳情 🔎 選方案
               </div>
