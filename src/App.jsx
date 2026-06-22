@@ -321,9 +321,9 @@ export default function App() {
                     <hr className="border-[#F0E4E4] my-3 sm:my-4" />
                     <div>
                       <p className="font-bold mb-1">🤎須知</p>
-                      <p>✔️皆從韓國叫貨</p>
-                      <p>✔️為壓低成本採海運7~21天（若有現貨2~5）</p>
-                      <p>✔️②件起批</p>
+                      <p>✔️我們要轉型了~所以全面出清中.</p>
+                      <p>✔️均現貨2~5天</p>
+                      <p>✔️1件起批</p>
                       <p>✔️可面交.到店取貨</p>
                       <p className="mt-3 text-[#D98282]">❌不提供商品圖請自行準備</p>
                     </div>
