@@ -371,7 +371,7 @@ export default function App() {
                       <p>❶設計免費（如需耗時較長酌收$30～50不等）</p>
                       <p>❷可印彩色or黑白</p>
                       <p>❸可只印一張</p>
-                      <p>❹風格、樣式可以討論</p>
+                      <p>❹風格、樣式可以討論 / 可手繪</p>
                       <p>❺可面交.到店取貨</p>
                     </div>
                     <hr className="border-[#F0E4E4] my-3 sm:my-4" />
