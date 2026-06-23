@@ -69,6 +69,7 @@ export default function App() {
                   <p>✔️現貨2~5天</p>
                   <p>✔️2件起批</p>
                   <p>✔️可面交.到店取貨</p>
+<p>✔️價格可能會有所微調</p>
                   <p className="mt-3 text-[#D98282]">❌不提供商品圖請自行準備</p>
                 </div>
               </div>
