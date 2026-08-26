@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   ShoppingBag, User, Settings, Trash2, Plus, Minus, 
@@ -21,38 +21,50 @@ export default function LumoStore() {
   const [checkoutStep, setCheckoutStep] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
   
-  const [members, setMembers] = useState({ '0912345678': 250 });
   const [currentUserPhone, setCurrentUserPhone] = useState('');
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginPhoneInput, setLoginPhoneInput] = useState('');
   
-  const [searchPhone, setSearchPhone] = useState('');
+ const [searchPhone, setSearchPhone] = useState('');
   const [searchedOrders, setSearchedOrders] = useState(null);
-
   const [categories, setCategories] = useState(['服飾飾品', '生活選物', '客製設計']);
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [newCategoryName, setNewCategoryName] = useState('');
-
-  const [cart, setCart] = useState({});
   const [formData, setFormData] = useState({
     name: '', phone: '', shippingMethod: '7-11', storeInfo: '', paymentMethod: 'COD', note: ''
   });
   const [usePoints, setUsePoints] = useState(false);
-
-  const [products, setProducts] = useState([
-    { id: 'p1', name: '經典燕麥色法式襯衫', price: 680, category: '服飾飾品', images: ['https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=500&q=80', 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80'], tag: '現貨' },
-    { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', images: ['https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80'], tag: '預購' }
-  ]);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [productForm, setProductForm] = useState({ name: '', price: '', category: '服飾飾品', imageInput: '', tag: '' });
-
-  const [orders, setOrders] = useState([]);
+ const [productForm, setProductForm] = useState({ 
+    name: '', price: '', category: '服飾飾品', imageInput: '', tag: '', description: '', stock: 0,
+    spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' 
+  });
+  const [activeProduct, setActiveProduct] = useState(null);
+  const [tempSpec1, setTempSpec1] = useState('');
+  const [tempSpec2, setTempSpec2] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
 
+  // --- 👇 加入 LocalStorage 記憶體功能 ---
+  const [members, setMembers] = useState(() => JSON.parse(localStorage.getItem('lumo_members')) || { '0912345678': 250 });
+  const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('lumo_cart')) || {});
+  const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('lumo_orders')) || []);
+  const [products, setProducts] = useState(() => JSON.parse(localStorage.getItem('lumo_products')) || [
+    { id: 'p1', name: '經典燕麥色法式襯衫', price: 680, category: '服飾飾品', images: ['https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=500&q=80'], tag: '現貨', description: '親膚材質，百搭首選。', stock: 5 },
+    { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', images: ['https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80'], tag: '預購', description: '進口厚磅卡紙。', stock: 0 }
+  ]);
+
+  useEffect(() => { localStorage.setItem('lumo_members', JSON.stringify(members)); }, [members]);
+  useEffect(() => { localStorage.setItem('lumo_cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { localStorage.setItem('lumo_orders', JSON.stringify(orders)); }, [orders]);
+  useEffect(() => { localStorage.setItem('lumo_products', JSON.stringify(products)); }, [products]);
+  // --- 👆 結束 ---
+
   // ================= 計算邏輯 =================
-  const cartItemDetails = Object.entries(cart).map(([id, qty]) => {
+ const cartItemDetails = Object.entries(cart).map(([cartKey, qty]) => {
+    const [id, s1, s2] = cartKey.split('|');
     const product = products.find(p => p.id === id);
-    return product ? { ...product, qty } : null;
+    if (!product) return null;
+    return { ...product, cartKey, selectedSpec1: s1 || '', selectedSpec2: s2 || '', qty };
   }).filter(Boolean);
 
   const subtotal = cartItemDetails.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -61,7 +73,7 @@ export default function LumoStore() {
   const discountAmount = usePoints ? Math.min(maxDiscountAmount, subtotal) : 0;
   
   // 運費全面改為 60
-  const shippingFee = 60;
+  const shippingFee = subtotal >= 599 ? 0 : 60;
   const finalTotal = Math.max(0, subtotal + shippingFee - discountAmount);
 
   // ================= 功能：前台 =================
@@ -74,24 +86,39 @@ export default function LumoStore() {
       setLoginModalOpen(false);
     }
   };
+// --- 👇 步驟2 新增：客寶查詢與分類邏輯 ---
 
-  const handleCustomerSearch = () => {
-    if (!searchPhone) return;
-    const foundOrders = orders.filter(o => o.phone === searchPhone);
-    setSearchedOrders(foundOrders);
+
+
+ 
+
+ 
+
+
+const handleAddClick = (product) => {
+    const hasSpec1 = product.spec1Options && product.spec1Options.length > 0;
+    const hasSpec2 = product.spec2Options && product.spec2Options.length > 0;
+    if (hasSpec1 || hasSpec2) {
+      setActiveProduct(product);
+      setTempSpec1(hasSpec1 ? product.spec1Options[0] : '');
+      setTempSpec2(hasSpec2 ? product.spec2Options[0] : '');
+    } else { addToCart(product, '', ''); }
   };
 
-  const updateQty = (id, delta) => {
-    setCart(prev => {
-      const next = (prev[id] || 0) + delta;
-      if (next <= 0) {
-        const { [id]: _, ...rest } = prev; return rest;
-      }
-      return { ...prev, [id]: next };
-    });
+  const addToCart = (product, s1, s2) => {
+    const key = `${product.id}|${s1}|${s2}`;
+    setCart(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
     setCartOpen(true);
+    setActiveProduct(null);
   };
 
+  const updateQty = (cartKey, delta) => {
+    setCart(prev => {
+      const next = (prev[cartKey] || 0) + delta;
+      if (next <= 0) { const { [cartKey]: _, ...rest } = prev; return rest; }
+      return { ...prev, [cartKey]: next };
+    });
+  };
   const handlePlaceOrder = (e) => {
     e.preventDefault();
     const phoneToUse = formData.phone;
@@ -113,10 +140,16 @@ export default function LumoStore() {
       ...prev,
       [phoneToUse]: (prev[phoneToUse] || 0) - (discountAmount * 100) + Math.max(0, finalTotal - shippingFee) 
     }));
+    
+    // 👇 結帳後自動扣除庫存
+    setProducts(prev => prev.map(p => {
+      const cartItem = cartItemDetails.find(c => c.id === p.id);
+      return cartItem ? { ...p, stock: Math.max(0, p.stock - cartItem.qty) } : p;
+    }));
+
     setCart({}); setCheckoutStep(false); setCartOpen(false); setUsePoints(false);
     alert(`🎉 訂單已送出！\n本次消費獲得 ${Math.max(0, finalTotal - shippingFee)} 點。`);
   };
-
   const handleCopyBank = () => {
     navigator.clipboard.writeText('88611238224675');
     setCopiedBank(true);
@@ -140,10 +173,19 @@ export default function LumoStore() {
     }));
   };
 
-  const saveProduct = (e) => {
+ const saveProduct = (e) => {
     e.preventDefault();
     const imageArray = productForm.imageInput.split(/[\n,]+/).map(url => url.trim()).filter(Boolean);
-    const newProduct = { ...productForm, images: imageArray };
+    const s1Opts = productForm.spec1Options ? productForm.spec1Options.split(',').map(s => s.trim()) : [];
+    const s2Opts = productForm.spec2Options ? productForm.spec2Options.split(',').map(s => s.trim()) : [];
+
+    const newProduct = { 
+      ...productForm, 
+      images: imageArray, 
+      stock: Number(productForm.stock),
+      spec1Options: s1Opts,
+      spec2Options: s2Opts
+    };
     delete newProduct.imageInput;
 
     if (editingProduct) {
@@ -152,7 +194,24 @@ export default function LumoStore() {
       setProducts([{ ...newProduct, id: `p${Date.now()}` }, ...products]);
     }
     setEditingProduct(null);
-    setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '' });
+    setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' });
+  };
+
+  // 👇 會員管理功能
+  const handleEditMemberPhone = (oldPhone) => {
+    const newPhone = prompt('請輸入新的電話號碼：', oldPhone);
+    if (newPhone && newPhone !== oldPhone) {
+      setMembers(prev => { const updated = { ...prev }; updated[newPhone] = updated[oldPhone]; delete updated[oldPhone]; return updated; });
+    }
+  };
+  const handleEditMemberPoints = (phone) => {
+    const newPoints = prompt('請輸入新的點數：', members[phone]);
+    if (newPoints !== null && !isNaN(newPoints)) setMembers(prev => ({ ...prev, [phone]: Number(newPoints) }));
+  };
+  const handleDeleteMember = (phone) => {
+    if(window.confirm(`確定刪除會員 ${phone} 嗎？`)) {
+      setMembers(prev => { const updated = { ...prev }; delete updated[phone]; return updated; });
+    }
   };
 
   // 分類功能管理 (含新增、刪除、上下排序)
@@ -318,8 +377,13 @@ export default function LumoStore() {
                             </td>
                             
                             <td style="vertical-align:top; padding-top:4px;">
+                                <td style="vertical-align:top; padding-top:4px;">
                                 <div style="line-height:1.4;font-weight:bold;">
                                     ${idx + 1}. ${item.name}
+                                    ${Number(item.stock) <= 0 ? `<span style="color:#d32f2f;font-size:9px;border:1px solid #d32f2f;padding:1px 3px;margin-left:4px;border-radius:2px;">預購</span>` : ''}
+                                </div>
+                                ${customTextHtml}
+                            </td>
                                     
                                     ${(() => {
                                         if (item.spotQty !== undefined && item.preorderQty !== undefined) {
@@ -409,9 +473,7 @@ export default function LumoStore() {
           <div></div> 
           
           <div className="flex justify-center cursor-pointer" onClick={() => { setIsAdmin(false); setCartOpen(false); }}>
-            <div className="h-10 sm:h-12 w-10 sm:w-12 rounded-full overflow-hidden bg-white border border-[#F0E4E4] flex items-center justify-center shadow-sm">
-              <img src="S__38576157.jpg" alt="LUMO Logo" className="w-full h-full object-cover" />
-            </div>
+           <span className="font-serif tracking-[0.2em] font-extrabold text-2xl text-[#6B5A59]">LUMO</span>
           </div>
 
           <div className="flex items-center justify-end gap-3">
@@ -429,7 +491,7 @@ export default function LumoStore() {
         
         {/* 點數活動跑馬燈公告 */}
         <div className="bg-[#A67C52] text-white text-[11px] sm:text-xs text-center py-1.5 tracking-wide font-medium">
-          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $1！
+          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $1 ｜ 🚚 全館滿 $599 免運費！
         </div>
       </header>
 
@@ -447,13 +509,15 @@ export default function LumoStore() {
             </div>
           ) : (
             <div>
-              <div className="flex gap-4 mb-6 border-b border-[#E8DED1] pb-2 overflow-x-auto whitespace-nowrap">
-                {['orders', 'products', 'categories'].map(tab => (
+            {/* --- 👇 步驟3 替換：後台分頁按鈕 --- */}
+             <div className="flex gap-4 mb-6 border-b border-[#E8DED1] pb-2 overflow-x-auto whitespace-nowrap">
+                {['orders', 'products', 'categories', 'members'].map(tab => (
                   <button key={tab} onClick={() => setAdminTab(tab)} className={`font-bold pb-2 px-1 ${adminTab === tab ? 'text-[#A67C52] border-b-2 border-[#A67C52]' : 'text-[#8C7A70]'}`}>
-                    {tab === 'orders' ? '訂單處理' : tab === 'products' ? '商品管理' : '分類管理'}
+                    {tab === 'orders' ? '訂單處理' : tab === 'products' ? '商品管理' : tab === 'categories' ? '分類管理' : '會員管理'}
                   </button>
                 ))}
               </div>
+              {/* --- 👆 結束 --- */}
 
               {adminTab === 'orders' && (
                 <div className="space-y-4">
@@ -495,34 +559,49 @@ export default function LumoStore() {
 
               {adminTab === 'products' && (
                 <div className="grid md:grid-cols-2 gap-6">
-                  <form onSubmit={saveProduct} className="bg-white p-5 rounded-2xl border border-[#E8DED1] space-y-4 shadow-sm h-fit">
+                 <form onSubmit={saveProduct} className="bg-white p-5 rounded-2xl border border-[#E8DED1] space-y-4 shadow-sm h-fit">
                     <h3 className="font-bold text-[#A67C52] border-b pb-2">{editingProduct ? '編輯商品' : '新增商品'}</h3>
                     <input type="text" placeholder="商品名稱" required value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
                     <input type="number" placeholder="價格" required value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
+                    
                     <select value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm">
                       {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                    <input type="text" placeholder="自訂標籤 (如：現貨)" value={productForm.tag} onChange={e => setProductForm({...productForm, tag: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
                     
-                    {/* 多圖輸入區塊 */}
+                    <input type="text" placeholder="自訂標籤 (如：現貨)" value={productForm.tag} onChange={e => setProductForm({...productForm, tag: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
+                    <textarea placeholder="商品介紹描述" required value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm h-16"></textarea>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-[#7A6B63] mb-1">庫存數量 (設為0即為預購)</label>
+                      <input type="number" required value={productForm.stock} onChange={e => setProductForm({...productForm, stock: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
+                    </div>
+
+                    {/* 雙規格設定區塊 */}
+                    <div className="p-3 bg-[#FAF6F0] rounded-xl border border-[#D3C2AD] space-y-3">
+                      <p className="text-xs font-bold text-[#A67C52]">✨ 雙規格設定 (非必填)</p>
+                      <div className="flex gap-2">
+                        <input type="text" placeholder="規格一(例:顏色)" value={productForm.spec1Name} onChange={e => setProductForm({...productForm, spec1Name: e.target.value})} className="w-1/3 border px-2 py-1 rounded text-xs" />
+                        <input type="text" placeholder="選項用逗號隔開(例:銀,金)" value={productForm.spec1Options} onChange={e => setProductForm({...productForm, spec1Options: e.target.value})} className="w-2/3 border px-2 py-1 rounded text-xs" />
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="text" placeholder="規格二(例:尺寸)" value={productForm.spec2Name} onChange={e => setProductForm({...productForm, spec2Name: e.target.value})} className="w-1/3 border px-2 py-1 rounded text-xs" />
+                        <input type="text" placeholder="選項用逗號隔開(例:S,M)" value={productForm.spec2Options} onChange={e => setProductForm({...productForm, spec2Options: e.target.value})} className="w-2/3 border px-2 py-1 rounded text-xs" />
+                      </div>
+                    </div>
+                    
                     <div>
                       <label className="block text-xs font-bold text-[#7A6B63] mb-1">圖片網址 (多張請用逗號或換行隔開)</label>
-                      <textarea 
-                        required 
-                        placeholder="https://image1.jpg,&#10;https://image2.jpg" 
-                        value={productForm.imageInput} 
-                        onChange={e => setProductForm({...productForm, imageInput: e.target.value})} 
-                        className="w-full border px-3 py-2 rounded-lg text-sm h-24"
-                      ></textarea>
+                      <textarea required placeholder="https://image1.jpg,&#10;https://image2.jpg" value={productForm.imageInput} onChange={e => setProductForm({...productForm, imageInput: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm h-24"></textarea>
                     </div>
 
                     <div className="flex gap-2">
                       <button type="submit" className="flex-1 bg-[#D3C2AD] text-white py-2 rounded-lg font-bold text-sm">儲存</button>
-                      {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setProductForm({ name: '', price: '', category: categories[0], imageInput: '', tag: '' });}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm">取消</button>}
+                      {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setProductForm({ name: '', price: '', category: categories[0], imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' });}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm">取消</button>}
                     </div>
                   </form>
                   <div className="space-y-3">
-                    {products.map(p => (
+                    {/* --- 👇 步驟6 替換：加入 filter 過濾邏輯 --- */}
+            {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
                         <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" />
                         <div className="flex-1">
@@ -536,6 +615,49 @@ export default function LumoStore() {
                   </div>
                 </div>
               )}
+
+{adminTab === 'members' && (
+                <div className="bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm max-w-2xl">
+                  <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">會員管理</h3>
+                  <div className="space-y-2">
+                    {Object.entries(members).map(([phone, points]) => (
+                      <div key={phone} className="flex flex-wrap justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1] gap-2">
+                        <div className="font-bold text-sm">📞 {phone} <span className="ml-4 text-[#A67C52]">💰 {points} 點</span></div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleEditMemberPhone(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改電話</button>
+                          <button onClick={() => handleEditMemberPoints(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改點數</button>
+                          <button onClick={() => handleDeleteMember(phone)} className="text-red-400 p-1"><Trash2 size={16}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+{/* --- 👇 步驟4 新增：分類管理介面 --- */}
+              {adminTab === 'categories' && (
+                <div className="max-w-md bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm">
+                  <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">前台分類設定</h3>
+                  <div className="flex gap-2 mb-4">
+                    <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="新增分類名稱" className="flex-1 border px-3 py-2 rounded-lg text-sm" />
+                    <button onClick={handleAddCategory} className="bg-[#D3C2AD] text-white px-4 py-2 rounded-lg font-bold text-sm">新增</button>
+                  </div>
+                  <div className="space-y-2">
+                    {categories.map((cat, idx) => (
+                      <div key={cat} className="flex justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1]">
+                        <span className="font-bold text-sm">{cat}</span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => moveCategory(idx, 'up')} className="p-1 text-gray-500 hover:text-black">↑</button>
+                          <button onClick={() => moveCategory(idx, 'down')} className="p-1 text-gray-500 hover:text-black">↓</button>
+                          <button onClick={() => deleteCategory(cat)} className="p-1 text-red-400 ml-2"><Trash2 size={14}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* --- 👆 結束 --- */}
+
 
               {/* ★ 完整找回的後台分類管理 (含排序按鈕) */}
               {adminTab === 'categories' && (
@@ -563,9 +685,47 @@ export default function LumoStore() {
           )}
         </main>
       ) : (
+
+
         /* ================= 前台購物與展示 ================= */
         <main className="max-w-4xl mx-auto px-4 py-8">
-          
+
+          {/* --- 👇 步驟5 新增：客寶查詢與前台分類按鈕 --- */}
+          <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
+            <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
+            <div className="flex gap-2 mb-4">
+              <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
+              <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
+            </div>
+            
+            {searchedOrders !== null && (
+              <div className="mt-4 pt-4 border-t border-[#F0EAE1]">
+                <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone] || 0}</span> 點</p>
+                {searchedOrders.length === 0 ? <p className="text-xs text-gray-500">查無訂單紀錄。</p> : (
+                  <div className="space-y-3">
+                    {searchedOrders.map(ord => (
+                      <div key={ord.id} className="bg-[#FAF6F0] p-3 rounded-xl border border-[#E8DED1] text-xs">
+                        <div className="flex justify-between font-bold mb-1">
+                          <span>單號: {ord.id}</span>
+                          <span className={`${ord.status === '已出貨' ? 'text-gray-500' : 'text-[#A67C52]'}`}>{ord.status}</span>
+                        </div>
+                        <p>金額: ${ord.total}</p>
+                        <p className="text-gray-500 mt-1">門市: {ord.storeName}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none mb-6 pb-2">
+            <button onClick={() => setSelectedCategory('全部')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === '全部' ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>全部商品</button>
+            {categories.map(cat => (
+              <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === cat ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>{cat}</button>
+            ))}
+          </div>
+          {/* --- 👆 結束 --- */}
           <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
             <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
             <div className="flex gap-2 mb-4">
@@ -619,17 +779,56 @@ export default function LumoStore() {
                 </div>
                 
                 <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2">
-                  <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight">{product.name}</h3>
+                  <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight">
+  {product.name}
+  {Number(product.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+</h3>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
                     <span className="font-bold text-[#A67C52] text-sm">${product.price}</span>
-                    <button onClick={() => updateQty(product.id, 1)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center">
-                      加入
-                    </button>
+                   <button onClick={() => handleAddClick(product)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center">加入</button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+
+{activeProduct && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate-fade-in relative">
+                <button onClick={() => setActiveProduct(null)} className="absolute top-3 right-3 text-gray-400">✕</button>
+                <div className="flex gap-3 mb-4">
+                  <img src={activeProduct.images[0]} className="w-16 h-16 rounded-xl object-cover" />
+                  <div>
+                    <h3 className="font-bold text-sm text-[#4A403A]">{activeProduct.name}</h3>
+                    <span className="text-[#A67C52] font-bold text-sm">${activeProduct.price}</span>
+                  </div>
+                </div>
+                <div className="space-y-4 mb-6">
+                  {activeProduct.spec1Options && activeProduct.spec1Options.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-[#7A6B63] mb-2">{activeProduct.spec1Name || '規格一'}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {activeProduct.spec1Options.map(opt => (
+                          <button key={opt} onClick={() => setTempSpec1(opt)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${tempSpec1 === opt ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#7A6B63] border-[#E8DED1]'}`}>{opt}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {activeProduct.spec2Options && activeProduct.spec2Options.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-[#7A6B63] mb-2">{activeProduct.spec2Name || '規格二'}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {activeProduct.spec2Options.map(opt => (
+                          <button key={opt} onClick={() => setTempSpec2(opt)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${tempSpec2 === opt ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#7A6B63] border-[#E8DED1]'}`}>{opt}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => addToCart(activeProduct, tempSpec1, tempSpec2)} className="w-full bg-[#D3C2AD] hover:bg-[#C2AF99] text-white py-3 rounded-xl font-bold transition">確認加入購物車</button>
+              </div>
+            </div>
+          )}
         </main>
       )}
 
@@ -653,12 +852,18 @@ export default function LumoStore() {
                     <div key={item.id} className="flex gap-3 p-3 rounded-xl border border-[#F0EAE1] bg-[#FAF6F0]/40">
                       <img src={item.images?.[0]} className="w-16 h-16 object-cover rounded-lg" />
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-xs font-bold truncate">{item.name}</h4>
+                        <h4 className="text-xs font-bold truncate">
+  {item.name}
+{(item.selectedSpec1 || item.selectedSpec2) && (
+    <div className="text-[10px] text-[#8C7A70] mt-0.5">規格：{item.selectedSpec1} {item.selectedSpec2}</div>
+  )}
+  {Number(item.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+</h4>
                         <div className="text-xs text-[#A67C52] font-semibold mt-1">${item.price}</div>
                         <div className="flex items-center gap-2 mt-2">
-                          <button onClick={() => updateQty(item.id, -1)} className="p-1 rounded bg-white border"><Minus size={12} /></button>
+                          <button onClick={() => updateQty(item.cartKey, -1)} className="p-1 rounded bg-white border"><Minus size={12} /></button>
                           <span className="text-xs px-2">{item.qty}</span>
-                          <button onClick={() => updateQty(item.id, 1)} className="p-1 rounded bg-white border"><Plus size={12} /></button>
+                          <button onClick={() => updateQty(item.cartKey, 1)} className="p-1 rounded bg-white border"><Plus size={12} /></button>
                         </div>
                       </div>
                     </div>
@@ -666,6 +871,54 @@ export default function LumoStore() {
                 )
               ) : (
                 <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4 text-sm">
+{/* --- 👇 新增：結帳下單與商品須知 --- */}
+                  <div className="bg-[#FAF6F0] rounded-xl border border-[#E8DED1] p-4 mb-5 text-[#7A6B63] text-[11px] sm:text-xs leading-relaxed shadow-sm">
+                    <h4 className="font-bold text-[#A67C52] text-[13px] mb-2 text-center border-b border-[#E8DED1] pb-2">🤍 LUMO 客寶下單與商品須知 🤍</h4>
+                    
+                    {/* 設定固定高度並允許上下滑動，避免佔用整個手機螢幕 */}
+                    <div className="space-y-3 h-40 overflow-y-auto pr-2">
+                      <p><span className="font-bold text-[#4A403A]">Material |</span> 925 銀 &nbsp;&nbsp; <span className="font-bold text-[#4A403A]">Color |</span> 銀、金</p>
+                      
+                      <div>
+                        <p className="font-bold text-[#4A403A]">📦 出貨時間</p>
+                        <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                          <li>現貨商品：1-3日內出貨</li>
+                          <li>預購商品：7-21日內出貨 (不含假日與例假日)</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <p className="font-bold text-[#4A403A]">✨ 商品須知</p>
+                        <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                          <li>商品皆為實拍，因光線與螢幕顯色略有色差屬正常現象。</li>
+                          <li>部分商品可能有微小瑕疵或凹痕，完美主義者請斟酌下單。</li>
+                          <li>銀針耳環材質較軟，如於運送過程中略有變形，可手動輕輕調整，不影響配戴使用。</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <p className="font-bold text-[#4A403A]">🔄 退換貨須知</p>
+                        <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                          <li>鑑賞期非試用期，商品需保持全新與包裝完整方可退換。</li>
+                          <li>若訂單使用折價券或賣場免運優惠，部分退貨後未達門檻，則保留商品不再適用折扣、運費優惠。</li>
+                          <li>耳環屬貼身物品，基於衛生考量恕不提供退換服務。</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <p className="font-bold text-[#4A403A]">💍 飾品保養</p>
+                        <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                          <li>請避免配戴飾品沐浴、接觸水氣、香水或化學成分。</li>
+                          <li>純銀飾品氧化變黑為自然現象，建議定期以拭銀布擦拭保養。</li>
+                          <li>未配戴時建議擦拭乾淨後放入密封袋保存。</li>
+                          <li>鍍色飾品會隨使用習慣產生耗損與褪色，屬正常情況。</li>
+                        </ul>
+                      </div>
+                      
+                      <p className="pt-2 border-t border-[#E8DED1] text-center mt-3 font-medium text-[#A67C52]">如有任何疑問，歡迎私訊詢問，我們會儘快回覆您。</p>
+                    </div>
+                  </div>
+                  {/* --- 👆 結束 --- */}
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">姓名 *</label><input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">手機號碼 *</label><input type="tel" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   
@@ -694,7 +947,7 @@ export default function LumoStore() {
                     </div>
                   )}
 
-                  <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">取貨方式 *</label><div className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-500">7-11 超商取貨 (運費 $60)</div></div>
+                  <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">取貨方式 *</label><div className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-500">7-11 超商取貨 (運費 $60，滿 $599 免運)</div></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">門市名稱與店號 (六碼) *</label><input type="text" required placeholder="例：鑫華門市 (981245)" value={formData.storeInfo} onChange={e => setFormData({...formData, storeInfo: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">備註</label><textarea value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className="w-full border px-3 py-2 rounded-lg h-16"></textarea></div>
                   
@@ -716,7 +969,7 @@ export default function LumoStore() {
             {cartItemDetails.length > 0 && (
               <div className="p-4 border-t bg-white space-y-2">
                 <div className="flex justify-between text-xs"><span>商品小計</span><span>${subtotal}</span></div>
-                <div className="flex justify-between text-xs"><span>7-11 運費</span><span>+${shippingFee}</span></div>
+                <div className="flex justify-between text-xs"><span>7-11 運費</span><span>{shippingFee === 0 ? <span className="text-green-600 font-bold">+$0 (滿額免運)</span> : '+$60'}</span></div>
                 {usePoints && discountAmount > 0 && <div className="flex justify-between text-xs text-[#A67C52]"><span>點數折抵</span><span>-${discountAmount}</span></div>}
                 <div className="flex justify-between font-bold pt-2 border-t text-sm"><span>總結帳金額</span><span className="text-[#A67C52]">${finalTotal}</span></div>
                 {!checkoutStep ? (
