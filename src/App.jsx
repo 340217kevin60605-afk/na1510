@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 
 const getSevenStoreId = (storeName) => {
+  if (!storeName) return null;
   const match = storeName.match(/\((\d{6})\)/);
   return match ? match[1] : null;
 };
@@ -38,7 +39,6 @@ export default function LumoStore() {
   });
   const [usePoints, setUsePoints] = useState(false);
 
-  // 商品資料結構更新：支援多圖 (images 陣列)
   const [products, setProducts] = useState([
     { id: 'p1', name: '經典燕麥色法式襯衫', price: 680, category: '服飾飾品', images: ['https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=500&q=80', 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80'], tag: '現貨' },
     { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', images: ['https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80'], tag: '預購' }
@@ -60,7 +60,7 @@ export default function LumoStore() {
   const maxDiscountAmount = Math.floor(currentPoints / 100);
   const discountAmount = usePoints ? Math.min(maxDiscountAmount, subtotal) : 0;
   
-  // 運費變更為 60
+  // 運費全面改為 60
   const shippingFee = 60;
   const finalTotal = Math.max(0, subtotal + shippingFee - discountAmount);
 
@@ -100,8 +100,9 @@ export default function LumoStore() {
       orderId: Date.now().toString().slice(-6),
       createdAt: { seconds: Math.floor(Date.now() / 1000) },
       ...formData,
-      items: cartItemDetails,
+      items: cartItemDetails.map(item => ({...item, quantity: item.qty, image: item.images[0]})), 
       logistics: '711',
+      storeName: formData.storeInfo, 
       shippingFee: shippingFee,
       subtotal, discount: discountAmount, total: finalTotal, status: '待處理', 
       paymentStatus: formData.paymentMethod === 'COD' ? '未付款 (貨到付款)' : '未付款 (待轉帳)'
@@ -110,7 +111,7 @@ export default function LumoStore() {
     setOrders([newOrder, ...orders]);
     setMembers(prev => ({
       ...prev,
-      [phoneToUse]: (prev[phoneToUse] || 0) - (discountAmount * 100) + Math.max(0, finalTotal - shippingFee)
+      [phoneToUse]: (prev[phoneToUse] || 0) - (discountAmount * 100) + Math.max(0, finalTotal - shippingFee) 
     }));
     setCart({}); setCheckoutStep(false); setCartOpen(false); setUsePoints(false);
     alert(`🎉 訂單已送出！\n本次消費獲得 ${Math.max(0, finalTotal - shippingFee)} 點。`);
@@ -129,7 +130,6 @@ export default function LumoStore() {
     else { alert('密碼錯誤！'); setAdminPwdInput(''); }
   };
 
-  // 訂單付款狀態切換
   const togglePaymentStatus = (id) => {
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
@@ -140,7 +140,6 @@ export default function LumoStore() {
     }));
   };
 
-  // 商品儲存 (處理多圖)
   const saveProduct = (e) => {
     e.preventDefault();
     const imageArray = productForm.imageInput.split(/[\n,]+/).map(url => url.trim()).filter(Boolean);
@@ -156,6 +155,7 @@ export default function LumoStore() {
     setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '' });
   };
 
+  // 分類功能管理 (含新增、刪除、上下排序)
   const handleAddCategory = () => {
     if (newCategoryName && !categories.includes(newCategoryName)) {
       setCategories([...categories, newCategoryName]);
@@ -168,40 +168,72 @@ export default function LumoStore() {
     if (selectedCategory === cat) setSelectedCategory('全部');
   };
 
+  // ★ 找回的分類排序功能
+  const moveCategory = (index, direction) => {
+    const newCats = [...categories];
+    if (direction === 'up' && index > 0) {
+      [newCats[index - 1], newCats[index]] = [newCats[index], newCats[index - 1]];
+    } else if (direction === 'down' && index < newCats.length - 1) {
+      [newCats[index + 1], newCats[index]] = [newCats[index], newCats[index + 1]];
+    }
+    setCategories(newCats);
+  };
+
   const handleSelectOrder = (id) => {
     setSelectedOrderIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  // 📝 賣貨便匯入單
   const handleExport711Excel = () => {
-    const ordersToExport = selectedOrderIds.length > 0 ? orders.filter(o => selectedOrderIds.includes(o.id)) : orders;
+    const ordersToExport = selectedOrderIds.length > 0 
+        ? orders.filter(o => selectedOrderIds.includes(o.id)) 
+        : orders;
+
     if (ordersToExport.length === 0) return alert("沒有訂單可以匯出");
 
     const headerRows = [
-      ["賣貨便- 訂單匯入檢核"],
-      ["請在本檔案填入商品資料，一次最多可以上傳 500 筆商品資料"],
-      ["按下 「驗證」 後，會協助您檢查資料格式。"],
-      ["【註：若整筆資料不要，請選取整列後按右鍵刪除】"],
-      [],
-      ["＊取件人姓名", "＊取件人手機", "＊取件門市", "* 溫層", "＊商品", "＊訂單金額", "＊運費金額", "買家下訂日期", "商品備註", "其他資訊\n(FB/LINE/IG帳號)", "excel驗證結果說明"]
+        ["賣貨便- 訂單匯入檢核"],
+        ["請在本檔案填入商品資料，一次最多可以上傳 500 筆商品資料"],
+        ["按下 「驗證」 後，會協助您檢查資料格式。"],
+        ["【註：若整筆資料不要，請選取整列後按右鍵刪除】"],
+        [], 
+        ["＊取件人姓名", "＊取件人手機", "＊取件門市", "* 溫層", "＊商品", "＊訂單金額", "＊運費金額", "買家下訂日期", "商品備註", "其他資訊\n(FB/LINE/IG帳號)", "excel驗證結果說明"]
     ];
 
     const dataRows = ordersToExport.map(order => {
-      let collectionAmount = order.paymentStatus.includes('已付款') ? 0 : order.total;
+        const websiteTotal = Number(order.total) || 0;
+        let collectionAmount = Math.max(0, websiteTotal - 38);
+        
+        if (order.paymentStatus.includes('已付款')) {
+            collectionAmount = 20;
+        }
 
-      const rawStoreName = order.storeInfo || '';
-      let storeId = getSevenStoreId(rawStoreName);
-      if (!storeId && /^\d{6}$/.test(rawStoreName.trim())) storeId = rawStoreName.trim();
+        const rawStoreName = order.storeName || '';
+        let storeId = getSevenStoreId(rawStoreName);
+        
+        if (!storeId && /^\d{6}$/.test(rawStoreName.trim())) {
+            storeId = rawStoreName.trim();
+        }
 
-      let dateStr = "";
-      if(order.createdAt) {
-        const d = new Date(order.createdAt.seconds * 1000);
-        dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-      }
+        let dateStr = "";
+        if(order.createdAt) {
+            const d = order.createdAt.seconds ? new Date(order.createdAt.seconds * 1000) : new Date(order.createdAt);
+            dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+        }
 
-      return [
-        order.name || '', order.phone || '', storeId || '', "常溫", "服飾飾品",
-        collectionAmount, shippingFee, dateStr, order.note || '', "", ""
-      ];
+        return [
+            order.name || '',           
+            order.phone || '',          
+            storeId || '',              
+            "常溫",                     
+            "服飾飾品",                 
+            collectionAmount,           
+            38,                         
+            dateStr,                    
+            order.note || '',           
+            "",                         
+            ""                          
+        ];
     });
 
     const problemOrders = ordersToExport.filter((o, i) => !dataRows[i][2]);
@@ -210,92 +242,175 @@ export default function LumoStore() {
     const worksheet = XLSX.utils.aoa_to_sheet(finalData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "7-11匯入單");
-    XLSX.writeFile(workbook, `賣貨便匯入單_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    const fileName = `賣貨便匯入單_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
 
     if (problemOrders.length > 0) {
-      alert(`⚠️ 匯出完成，但有 ${problemOrders.length} 筆資料缺少店號！\n請手動檢查。`);
+        const errorDetail = problemOrders.map(o => `● 訂單 #${o.orderId} (門市: ${o.storeName || '未填寫'})`).join('\n');
+        alert(`⚠️ 匯出完成，但有 ${problemOrders.length} 筆資料缺少店號！\n\n請手動檢查以下訂單：\n${errorDetail}`);
     } else {
-      alert("✅ 匯出成功！訂單已自動轉為「已出貨」。");
-      setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
-      setSelectedOrderIds([]);
+        alert("✅ 匯出成功！格式已符合賣貨便要求。\n(訂單已自動轉為已出貨)");
+        setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
+        setSelectedOrderIds([]);
     }
   };
 
-  const handleBulkPrint = () => {
-    if (selectedOrderIds.length === 0) return alert("請先選擇訂單");
-    const ordersToPrint = orders.filter(o => selectedOrderIds.includes(o.id));
-    
+  // 📝 A6 終極列印單
+  const printOrder = (input) => {
+    if (!input) return;
+    const ordersToPrint = Array.isArray(input) ? input : [input];
+    if (ordersToPrint.length === 0) return;
+
     const printWindow = window.open('', '_blank');
+    
     const ordersHtml = ordersToPrint.map((order, index) => {
-      const displayNote = (order.note || '無').replace(/\n/g, '<br/>');
-      return `
+        const subtotal = order.items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+        const shipping = Number(order.shippingFee) || 0;
+        const manualDiscount = Number(order.discount) || 0;
+        const autoDiscount = Number(order.autoDiscount) || 0;
+        const total = Math.max(0, subtotal + shipping - manualDiscount - autoDiscount);
+
+        let logisticsMethod = '7-11 超商取貨';
+        let addressDisplay = `門市：${order.storeName || '無'}<br/>地址：${order.address || '無'}`;
+        const displayNote = (order.note || order.remarks || '無').replace(/\n/g, '<br/>');
+
+        return `
         <div class="page ${index < ordersToPrint.length - 1 ? 'page-break' : ''}">
-          <div class="header">
-            <h1>LUMO 出貨單</h1>
-            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-              <p>Order #${order.orderId}</p>
-              <p style="font-size:9px; color:#555;">${new Date(order.createdAt.seconds * 1000).toLocaleDateString()}</p>
+            <div class="header">
+                <h1>LUMO 出貨單</h1>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                     <p>Order #${order.orderId}</p>
+                     <p style="font-size:9px; color:#555;">${order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleDateString() : '-'}</p>
+                </div>
             </div>
-          </div>
-          <div class="info-section">
-            <div class="info-row"><span class="info-label">收件人：</span><span>${order.name} / ${order.phone}</span></div>
-            <div class="info-row"><span class="info-label">狀態：</span><span>${order.paymentStatus}</span></div>
-            <div class="info-row"><span class="info-label">地址：</span><span style="font-size:9px;">門市：${order.storeInfo || '無'}</span></div>
-            <div class="info-row"><span class="info-label">備註：</span><span style="font-size:9px; font-weight:bold;">${displayNote}</span></div>
-          </div>
-          <table>
-            <thead><tr><th width="40">圖片</th><th>品名 / 規格</th><th width="25" style="text-align:center">數</th><th width="35" style="text-align:right">單價</th></tr></thead>
-            <tbody>
-              ${order.items.map((item, idx) => `
-                <tr>
-                  <td style="padding:2px; vertical-align:top;"><img src="${item.images?.[0]}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;"></td>
-                  <td style="vertical-align:top; padding-top:4px;"><div style="line-height:1.4;font-weight:bold;">${idx + 1}. ${item.name}</div></td>
-                  <td style="text-align:center;vertical-align:middle;font-weight:bold;">${item.qty}</td>
-                  <td style="text-align:right;vertical-align:middle;">$${item.price}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="totals-section">
-            <div class="total-row final"><span>代收總額：</span><span>NT$ ${order.paymentStatus.includes('已付款') ? '0 (已付款)' : order.total}</span></div>
-          </div>
+
+            <div class="info-section">
+                <div class="info-row"><span class="info-label">收件人：</span><span>${order.name} / ${order.phone}</span></div>
+                <div class="info-row"><span class="info-label">物流：</span><span>${logisticsMethod}</span></div>
+                <div class="info-row"><span class="info-label">狀態：</span><span>${order.paymentStatus}</span></div>
+                <div class="info-row"><span class="info-label">地址：</span><span style="font-size:9px; line-height:1.2;">${addressDisplay}</span></div>
+                <div class="info-row"><span class="info-label">備註：</span><span style="font-size:9px; line-height:1.2; color:#333; font-weight:bold;">${displayNote}</span></div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th width="40">圖片</th>
+                        <th>品名 / 規格</th>
+                        <th width="25" style="text-align:center">數</th>
+                        <th width="35" style="text-align:right">單價</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${order.items ? order.items.map((item, idx) => {
+                        const imgUrl = item.image || item.images?.[0] || null;
+                        
+                        let customTextHtml = '';
+                        if (item.nailCustomization) {
+                            const label = (item.selectedVariant === '補甲' || item.customImageUrl) ? '補甲' : '客製';
+                            customTextHtml = \`<div style="color:#d63384; font-size:9px; margin-top:2px; font-weight:bold;">(\${label}: \${item.nailCustomization})</div>\`;
+                        }
+
+                        return \`
+                        <tr>
+                            <td style="padding:2px; vertical-align:top;">
+                                \${imgUrl ? \`<img src="\${imgUrl}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;">\` : '<span style="color:#ccc;font-size:8px;">無圖</span>'}
+                            </td>
+                            
+                            <td style="vertical-align:top; padding-top:4px;">
+                                <div style="line-height:1.4;font-weight:bold;">
+                                    \${idx + 1}. \${item.name}
+                                    
+                                    \${(() => {
+                                        if (item.spotQty !== undefined && item.preorderQty !== undefined) {
+                                            if (item.spotQty > 0 && item.preorderQty > 0) return \`<span style="font-size:9px; color:#16a34a; margin-left:4px; font-weight:bold;">[含預購 \${item.preorderQty}]</span>\`;
+                                            else if (item.preorderQty > 0) return \`<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>\`;
+                                            else return '';
+                                        }
+                                        return item.isPreOrder ? '<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>' : '';
+                                    })()}
+                                </div>
+                                \${item.selectedVariant ? \`<div style="color:#666;font-size:9px;margin-top:2px;">規格: \${item.selectedVariant}</div>\` : ''}
+                                \${customTextHtml}
+                            </td>
+                            <td style="text-align:center;vertical-align:middle;font-weight:bold;">\${item.quantity || item.qty || 1}</td>
+                            <td style="text-align:right;vertical-align:middle;">$\${item.price}</td>
+                        </tr>
+                        \`;
+                    }).join('') : ''}
+                </tbody>
+            </table>
+
+            <div class="totals-section">
+                <div class="total-row"><span>商品小計：</span><span>$\${subtotal.toLocaleString()}</span></div>
+                <div class="total-row"><span>運費：</span><span>+$\${shipping}</span></div>
+                \${manualDiscount > 0 ? \`<div class="total-row text-red"><span>點數折抵：</span><span>-$\${manualDiscount}</span></div>\` : ''}
+                <div class="total-row final"><span>總金額：</span><span>NT$ \${total.toLocaleString()}</span></div>
+            </div>
         </div>
-      `;
+        \`;
     }).join('');
 
-    printWindow.document.write(`
-      <html><head><title>出貨單列印</title><style>
-      @page { size: A6; margin: 0; }
-      body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; background: #fff; color: #000; }
-      .page { width: 105mm; padding: 5mm; box-sizing: border-box; font-size: 10px; line-height: 1.3; }
-      .page-break { page-break-after: always; }
-      .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
-      .header h1 { margin: 0; font-size: 16px; letter-spacing: 1px; }
-      .info-section { margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-      .info-row { display: flex; margin-bottom: 2px; }
-      .info-label { width: 45px; color: #666; font-weight: bold; flex-shrink: 0; }
-      table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 5px; }
-      th { text-align: left; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9; }
-      td { border-bottom: 1px dashed #ddd; padding: 4px 2px; }
-      .totals-section { border-top: 1px solid #000; padding-top: 5px; font-size: 10px; }
-      .total-row.final { font-weight: bold; font-size: 14px; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
-      </style></head><body>${ordersHtml}<script>window.onload = function() { setTimeout(() => window.print(), 500); }</script></body></html>
-    `);
+    const htmlContent = \`
+        <html>
+        <head>
+            <title>出貨單列印</title>
+            <style>
+                @page { size: A6; margin: 0; }
+                body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; margin: 0; padding: 0; background: #fff; color: #000; }
+                .page { width: 105mm; padding: 5mm; box-sizing: border-box; font-size: 10px; line-height: 1.3; }
+                .page-break { page-break-after: always; }
+                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
+                .header h1 { margin: 0; font-size: 16px; letter-spacing: 1px; }
+                .header p { margin: 2px 0 0 0; font-size: 10px; }
+                .info-section { margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                .info-row { display: flex; margin-bottom: 2px; align-items: baseline; }
+                .info-label { width: 45px; color: #666; font-weight: bold; flex-shrink: 0; }
+                table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 5px; }
+                th { text-align: left; border-bottom: 1px solid #000; padding: 3px 2px; font-size: 9px; background: #f9f9f9; }
+                td { border-bottom: 1px dashed #ddd; padding: 4px 2px; }
+                tr { page-break-inside: avoid; } 
+                .totals-section { border-top: 1px solid #000; padding-top: 5px; margin-top: 10px; font-size: 10px; width: 100%; page-break-inside: avoid; }
+                .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+                .total-row.text-red { color: #d32f2f; }
+                .total-row.final { font-weight: bold; font-size: 14px; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
+            </style>
+        </head>
+        <body>
+            \${ordersHtml}
+            <script>
+                window.onload = function() { setTimeout(() => window.print(), 500); }
+            <\\/script>
+        </body>
+        </html>
+    \`;     
+    printWindow.document.write(htmlContent);
     printWindow.document.close();
+  };
+
+  const handleBulkPrint = () => {
+    if (selectedOrderIds.length === 0) {
+        alert("請先選擇訂單");
+        return;
+    }
+    const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
+    printOrder(selectedOrders);
+    
     setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
     setSelectedOrderIds([]);
   };
 
   return (
     <div className="min-h-screen bg-[#FAF6F0] text-[#4A403A] font-sans selection:bg-[#D3C2AD] selection:text-white">
-      {/* 導覽列：置中 Logo 設計 */}
+      {/* 導覽列：置中 Logo 設計 (套用指定圖片) */}
       <header className="bg-white/90 backdrop-blur-md border-b border-[#E8DED1] sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 h-16 grid grid-cols-3 items-center">
-          <div></div> {/* 左側留白平衡 */}
+          <div></div> 
           
           <div className="flex justify-center cursor-pointer" onClick={() => { setIsAdmin(false); setCartOpen(false); }}>
-            <div className="h-9 w-24 bg-[#D3C2AD] rounded-lg flex items-center justify-center shadow-inner">
-              <span className="text-white font-serif tracking-[0.2em] font-bold text-lg">LUMO</span>
+            <div className="h-10 sm:h-12 w-10 sm:w-12 rounded-full overflow-hidden bg-white border border-[#F0E4E4] flex items-center justify-center shadow-sm">
+              <img src="S__38576157.jpg" alt="LUMO Logo" className="w-full h-full object-cover" />
             </div>
           </div>
 
@@ -361,7 +476,7 @@ export default function LumoStore() {
                                 onClick={() => togglePaymentStatus(ord.id)}
                                 className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${ord.paymentStatus.includes('已付款') ? 'bg-[#dcfce7] text-[#166534] hover:bg-[#bbf7d0]' : 'bg-[#fee2e2] text-[#991b1b] hover:bg-[#fecaca]'}`}
                               >
-                                {ord.paymentStatus} (點擊切換)
+                                {ord.paymentStatus}
                               </button>
                               <span className={`px-2.5 py-1 rounded-full text-[10px] ${ord.status === '已出貨' ? 'bg-[#E5E7EB] text-[#4B5563]' : 'bg-[#EBF3E8] text-[#486940]'}`}>
                                 {ord.status}
@@ -369,7 +484,7 @@ export default function LumoStore() {
                             </div>
                           </div>
                           <p>顧客：{ord.name} ({ord.phone})</p>
-                          <p>門市：{ord.storeInfo}</p>
+                          <p>門市：{ord.storeName}</p>
                           <p className="font-bold text-[#A67C52] mt-2">總計：${ord.total}</p>
                         </div>
                       </div>
@@ -421,12 +536,64 @@ export default function LumoStore() {
                   </div>
                 </div>
               )}
+
+              {/* ★ 完整找回的後台分類管理 (含排序按鈕) */}
+              {adminTab === 'categories' && (
+                <div className="max-w-md bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm">
+                  <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">前台分類設定</h3>
+                  <div className="flex gap-2 mb-4">
+                    <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="新增分類名稱" className="flex-1 border px-3 py-2 rounded-lg text-sm" />
+                    <button onClick={handleAddCategory} className="bg-[#D3C2AD] text-white px-4 py-2 rounded-lg font-bold text-sm">新增</button>
+                  </div>
+                  <div className="space-y-2">
+                    {categories.map((cat, idx) => (
+                      <div key={cat} className="flex justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1]">
+                        <span className="font-bold text-sm">{cat}</span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => moveCategory(idx, 'up')} className="p-1 text-gray-500 hover:text-black">↑</button>
+                          <button onClick={() => moveCategory(idx, 'down')} className="p-1 text-gray-500 hover:text-black">↓</button>
+                          <button onClick={() => deleteCategory(cat)} className="p-1 text-red-400 ml-2"><Trash2 size={14}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
       ) : (
         /* ================= 前台購物與展示 ================= */
         <main className="max-w-4xl mx-auto px-4 py-8">
+          
+          <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
+            <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
+            <div className="flex gap-2 mb-4">
+              <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
+              <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
+            </div>
+            
+            {searchedOrders !== null && (
+              <div className="mt-4 pt-4 border-t border-[#F0EAE1]">
+                <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone] || 0}</span> 點</p>
+                {searchedOrders.length === 0 ? <p className="text-xs text-gray-500">查無訂單紀錄。</p> : (
+                  <div className="space-y-3">
+                    {searchedOrders.map(ord => (
+                      <div key={ord.id} className="bg-[#FAF6F0] p-3 rounded-xl border border-[#E8DED1] text-xs">
+                        <div className="flex justify-between font-bold mb-1">
+                          <span>單號: {ord.id}</span>
+                          <span className={`${ord.status === '已出貨' ? 'text-gray-500' : 'text-[#A67C52]'}`}>{ord.status}</span>
+                        </div>
+                        <p>金額: ${ord.total}</p>
+                        <p className="text-gray-500 mt-1">門市: {ord.storeName}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none mb-6 pb-2">
             <button onClick={() => setSelectedCategory('全部')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === '全部' ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>全部商品</button>
             {categories.map(cat => (
@@ -446,7 +613,7 @@ export default function LumoStore() {
                   {product.tag && <span className="absolute top-2 left-2 text-[10px] sm:text-xs bg-white/90 px-2 py-1 rounded-full font-bold text-[#7A6B63] shadow-sm">{product.tag}</span>}
                   {product.images?.length > 1 && (
                     <div className="absolute bottom-2 right-2 bg-black/40 text-white text-[9px] px-1.5 py-0.5 rounded-md pointer-events-none">
-                      1 / {product.images.length}
+                      多圖滑動
                     </div>
                   )}
                 </div>
@@ -529,6 +696,7 @@ export default function LumoStore() {
 
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">取貨方式 *</label><div className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-500">7-11 超商取貨 (運費 $60)</div></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">門市名稱與店號 (六碼) *</label><input type="text" required placeholder="例：鑫華門市 (981245)" value={formData.storeInfo} onChange={e => setFormData({...formData, storeInfo: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
+                  <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">備註</label><textarea value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className="w-full border px-3 py-2 rounded-lg h-16"></textarea></div>
                   
                   {currentPoints > 0 && (
                     <div className="p-3 bg-[#FAF6F0] rounded-xl border border-[#E8DED1]">
