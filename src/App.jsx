@@ -68,7 +68,7 @@ export default function LumoStore() {
   }).filter(Boolean);
 
   const subtotal = cartItemDetails.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const currentPoints = members[formData.phone] || members[currentUserPhone] || 0;
+  const currentPoints = members[formData.phone.trim()] || members[currentUserPhone.trim()] || 0;
   const maxDiscountAmount = Math.floor(currentPoints / 100);
   const discountAmount = usePoints ? Math.min(maxDiscountAmount, subtotal) : 0;
   
@@ -121,7 +121,7 @@ const handleAddClick = (product) => {
   };
   const handlePlaceOrder = (e) => {
     e.preventDefault();
-    const phoneToUse = formData.phone;
+    const phoneToUse = formData.phone.trim();
     const newOrder = {
       id: `ORD-${Date.now().toString().slice(-6)}`,
       orderId: Date.now().toString().slice(-6),
@@ -467,9 +467,10 @@ const handleAddClick = (product) => {
   };
 
 // 🔍 補回遺失的：客寶查詢功能
-  const handleCustomerSearch = () => {
+ const handleCustomerSearch = () => {
     if (!searchPhone) return;
-    const foundOrders = orders.filter(o => o.phone === searchPhone);
+    const cleanPhone = searchPhone.trim();
+    const foundOrders = orders.filter(o => (o.phone || '').trim() === cleanPhone);
     setSearchedOrders(foundOrders);
   };
 
@@ -609,7 +610,7 @@ const handleAddClick = (product) => {
                   </form>
                   <div className="space-y-3">
                     {/* --- 👇 步驟6 替換：加入 filter 過濾邏輯 --- */}
-            {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
+           {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((p) => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
                         <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" />
                         <div className="flex-1">
@@ -628,16 +629,19 @@ const handleAddClick = (product) => {
                 <div className="bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm max-w-2xl">
                   <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">會員管理</h3>
                   <div className="space-y-2">
-                    {Object.entries(members).map(([phone, points]) => (
-                      <div key={phone} className="flex flex-wrap justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1] gap-2">
-                        <div className="font-bold text-sm">📞 {phone} <span className="ml-4 text-[#A67C52]">💰 {points} 點</span></div>
-                        <div className="flex gap-2">
-                          <button onClick={() => handleEditMemberPhone(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改電話</button>
-                          <button onClick={() => handleEditMemberPoints(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改點數</button>
-                          <button onClick={() => handleDeleteMember(phone)} className="text-red-400 p-1"><Trash2 size={16}/></button>
+                    {Object.entries(members).map(([phone, points]) => {
+                      const memberName = orders.find(o => o.phone === phone)?.name || '未填寫';
+                      return (
+                        <div key={phone} className="flex flex-wrap justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1] gap-2">
+                          <div className="font-bold text-sm">👤 {memberName} 📞 {phone} <span className="ml-4 text-[#A67C52]">💰 {points} 點</span></div>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleEditMemberPhone(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改電話</button>
+                            <button onClick={() => handleEditMemberPoints(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改點數</button>
+                            <button onClick={() => handleDeleteMember(phone)} className="text-red-400 p-1"><Trash2 size={16}/></button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -698,8 +702,7 @@ const handleAddClick = (product) => {
         /* ================= 前台購物與展示 ================= */
         <main className="max-w-4xl mx-auto px-4 py-8">
 
-          {/* --- 👇 步驟5 新增：客寶查詢與前台分類按鈕 --- */}
-          <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
+                   <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
             <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
             <div className="flex gap-2 mb-4">
               <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
@@ -708,7 +711,7 @@ const handleAddClick = (product) => {
             
             {searchedOrders !== null && (
               <div className="mt-4 pt-4 border-t border-[#F0EAE1]">
-                <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone] || 0}</span> 點</p>
+               <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone.trim()] || 0}</span> 點</p>
                 {searchedOrders.length === 0 ? <p className="text-xs text-gray-500">查無訂單紀錄。</p> : (
                   <div className="space-y-3">
                     {searchedOrders.map(ord => (
@@ -727,48 +730,7 @@ const handleAddClick = (product) => {
             )}
           </div>
 
-          <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none mb-6 pb-2">
-            <button onClick={() => setSelectedCategory('全部')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === '全部' ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>全部商品</button>
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === cat ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>{cat}</button>
-            ))}
-          </div>
-          {/* --- 👆 結束 --- */}
-          <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
-            <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
-            <div className="flex gap-2 mb-4">
-              <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
-              <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
-            </div>
-            
-            {searchedOrders !== null && (
-              <div className="mt-4 pt-4 border-t border-[#F0EAE1]">
-                <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone] || 0}</span> 點</p>
-                {searchedOrders.length === 0 ? <p className="text-xs text-gray-500">查無訂單紀錄。</p> : (
-                  <div className="space-y-3">
-                    {searchedOrders.map(ord => (
-                      <div key={ord.id} className="bg-[#FAF6F0] p-3 rounded-xl border border-[#E8DED1] text-xs">
-                        <div className="flex justify-between font-bold mb-1">
-                          <span>單號: {ord.id}</span>
-                          <span className={`${ord.status === '已出貨' ? 'text-gray-500' : 'text-[#A67C52]'}`}>{ord.status}</span>
-                        </div>
-                        <p>金額: ${ord.total}</p>
-                        <p className="text-gray-500 mt-1">門市: {ord.storeName}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none mb-6 pb-2">
-            <button onClick={() => setSelectedCategory('全部')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === '全部' ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>全部商品</button>
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === cat ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>{cat}</button>
-            ))}
-          </div>
-
+        
           {/* ⚡️ 一行兩格商品列 (Mobile: grid-cols-2, PC: grid-cols-3) */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
             {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
@@ -885,7 +847,7 @@ const handleAddClick = (product) => {
                     
                     {/* 設定固定高度並允許上下滑動，避免佔用整個手機螢幕 */}
                     <div className="space-y-3 h-40 overflow-y-auto pr-2">
-                      <p><span className="font-bold text-[#4A403A]">Material |</span> 925 銀 &nbsp;&nbsp; <span className="font-bold text-[#4A403A]">Color |</span> 銀、金</p>
+                     
                       
                       <div>
                         <p className="font-bold text-[#4A403A]">📦 出貨時間</p>
