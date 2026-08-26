@@ -455,7 +455,8 @@ const handleAddClick = (product) => {
   const handleBulkPrint = () => {
     if (selectedOrderIds.length === 0) {
         alert("請先選擇訂單");
-        return;
+
+       return;
     }
     const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
     printOrder(selectedOrders);
@@ -463,6 +464,13 @@ const handleAddClick = (product) => {
     // 印單後自動改為已出貨
     setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
     setSelectedOrderIds([]);
+  };
+
+// 🔍 補回遺失的：客寶查詢功能
+  const handleCustomerSearch = () => {
+    if (!searchPhone) return;
+    const foundOrders = orders.filter(o => o.phone === searchPhone);
+    setSearchedOrders(foundOrders);
   };
 
   return (
