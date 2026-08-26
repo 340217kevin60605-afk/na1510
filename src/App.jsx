@@ -26,7 +26,8 @@ export default function LumoStore() {
   const [loginPhoneInput, setLoginPhoneInput] = useState('');
   
  const [searchPhone, setSearchPhone] = useState('');
-  const [searchedOrders, setSearchedOrders] = useState(null);
+  // 建議修改 State 宣告：
+const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 [] 而非 null
   const [categories, setCategories] = useState(['服飾飾品', '生活選物', '客製設計']);
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -689,7 +690,7 @@ const handleAddClick = (product) => {
               <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
             </div>
             
-          {searchedOrders.map(ord => (
+          {searchedOrders?.map(ord => (
   <div key={ord.id} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-xs mb-3 shadow-sm relative overflow-hidden">
     <div className="absolute top-0 left-0 w-1 h-full bg-[#A67C52]"></div>
     <div className="flex justify-between font-bold mb-2 pb-2 border-b border-[#E8DED1]">
