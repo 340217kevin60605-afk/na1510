@@ -168,7 +168,6 @@ export default function LumoStore() {
     if (selectedCategory === cat) setSelectedCategory('全部');
   };
 
-  // ★ 找回的分類排序功能
   const moveCategory = (index, direction) => {
     const newCats = [...categories];
     if (direction === 'up' && index > 0) {
@@ -309,50 +308,50 @@ export default function LumoStore() {
                         let customTextHtml = '';
                         if (item.nailCustomization) {
                             const label = (item.selectedVariant === '補甲' || item.customImageUrl) ? '補甲' : '客製';
-                            customTextHtml = \`<div style="color:#d63384; font-size:9px; margin-top:2px; font-weight:bold;">(\${label}: \${item.nailCustomization})</div>\`;
+                            customTextHtml = `<div style="color:#d63384; font-size:9px; margin-top:2px; font-weight:bold;">(${label}: ${item.nailCustomization})</div>`;
                         }
 
-                        return \`
+                        return `
                         <tr>
                             <td style="padding:2px; vertical-align:top;">
-                                \${imgUrl ? \`<img src="\${imgUrl}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;">\` : '<span style="color:#ccc;font-size:8px;">無圖</span>'}
+                                ${imgUrl ? `<img src="${imgUrl}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;">` : '<span style="color:#ccc;font-size:8px;">無圖</span>'}
                             </td>
                             
                             <td style="vertical-align:top; padding-top:4px;">
                                 <div style="line-height:1.4;font-weight:bold;">
-                                    \${idx + 1}. \${item.name}
+                                    ${idx + 1}. ${item.name}
                                     
-                                    \${(() => {
+                                    ${(() => {
                                         if (item.spotQty !== undefined && item.preorderQty !== undefined) {
-                                            if (item.spotQty > 0 && item.preorderQty > 0) return \`<span style="font-size:9px; color:#16a34a; margin-left:4px; font-weight:bold;">[含預購 \${item.preorderQty}]</span>\`;
-                                            else if (item.preorderQty > 0) return \`<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>\`;
+                                            if (item.spotQty > 0 && item.preorderQty > 0) return `<span style="font-size:9px; color:#16a34a; margin-left:4px; font-weight:bold;">[含預購 ${item.preorderQty}]</span>`;
+                                            else if (item.preorderQty > 0) return `<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>`;
                                             else return '';
                                         }
                                         return item.isPreOrder ? '<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>' : '';
                                     })()}
                                 </div>
-                                \${item.selectedVariant ? \`<div style="color:#666;font-size:9px;margin-top:2px;">規格: \${item.selectedVariant}</div>\` : ''}
-                                \${customTextHtml}
+                                ${item.selectedVariant ? `<div style="color:#666;font-size:9px;margin-top:2px;">規格: ${item.selectedVariant}</div>` : ''}
+                                ${customTextHtml}
                             </td>
-                            <td style="text-align:center;vertical-align:middle;font-weight:bold;">\${item.quantity || item.qty || 1}</td>
-                            <td style="text-align:right;vertical-align:middle;">$\${item.price}</td>
+                            <td style="text-align:center;vertical-align:middle;font-weight:bold;">${item.quantity || item.qty || 1}</td>
+                            <td style="text-align:right;vertical-align:middle;">$${item.price}</td>
                         </tr>
-                        \`;
+                        `;
                     }).join('') : ''}
                 </tbody>
             </table>
 
             <div class="totals-section">
-                <div class="total-row"><span>商品小計：</span><span>$\${subtotal.toLocaleString()}</span></div>
-                <div class="total-row"><span>運費：</span><span>+$\${shipping}</span></div>
-                \${manualDiscount > 0 ? \`<div class="total-row text-red"><span>點數折抵：</span><span>-$\${manualDiscount}</span></div>\` : ''}
-                <div class="total-row final"><span>總金額：</span><span>NT$ \${total.toLocaleString()}</span></div>
+                <div class="total-row"><span>商品小計：</span><span>$${subtotal.toLocaleString()}</span></div>
+                <div class="total-row"><span>運費：</span><span>+$${shipping}</span></div>
+                ${manualDiscount > 0 ? `<div class="total-row text-red"><span>點數折抵：</span><span>-$${manualDiscount}</span></div>` : ''}
+                <div class="total-row final"><span>總金額：</span><span>NT$ ${total.toLocaleString()}</span></div>
             </div>
         </div>
-        \`;
+        `;
     }).join('');
 
-    const htmlContent = \`
+    const htmlContent = `
         <html>
         <head>
             <title>出貨單列印</title>
@@ -378,13 +377,13 @@ export default function LumoStore() {
             </style>
         </head>
         <body>
-            \${ordersHtml}
+            ${ordersHtml}
             <script>
                 window.onload = function() { setTimeout(() => window.print(), 500); }
-            <\\/script>
+            </script>
         </body>
         </html>
-    \`;     
+    `;     
     printWindow.document.write(htmlContent);
     printWindow.document.close();
   };
@@ -397,6 +396,7 @@ export default function LumoStore() {
     const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
     printOrder(selectedOrders);
     
+    // 印單後自動改為已出貨
     setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
     setSelectedOrderIds([]);
   };
