@@ -2,56 +2,50 @@ import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   ShoppingBag, User, Settings, Trash2, Plus, Minus, 
-  ArrowLeft, Edit2, Lock, Search, Printer, Download, CheckSquare, Square, GripVertical
+  ArrowLeft, Edit2, Lock, Search, Printer, Download, CheckSquare, Square, Copy, CheckCircle
 } from 'lucide-react';
 
-// 模擬查店號的輔助函數
 const getSevenStoreId = (storeName) => {
   const match = storeName.match(/\((\d{6})\)/);
   return match ? match[1] : null;
 };
 
 export default function LumoStore() {
-  // ================= 狀態管理 =================
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminPwdInput, setAdminPwdInput] = useState('');
-  const [adminTab, setAdminTab] = useState('orders'); // orders, products, categories
+  const [adminTab, setAdminTab] = useState('orders');
 
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState(false);
+  const [copiedBank, setCopiedBank] = useState(false);
   
-  // 會員與訂單查詢系統
   const [members, setMembers] = useState({ '0912345678': 250 });
   const [currentUserPhone, setCurrentUserPhone] = useState('');
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginPhoneInput, setLoginPhoneInput] = useState('');
   
-  // 客人查單狀態
   const [searchPhone, setSearchPhone] = useState('');
   const [searchedOrders, setSearchedOrders] = useState(null);
 
-  // 分類系統
   const [categories, setCategories] = useState(['服飾飾品', '生活選物', '客製設計']);
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [newCategoryName, setNewCategoryName] = useState('');
 
-  // 購物車
   const [cart, setCart] = useState({});
   const [formData, setFormData] = useState({
     name: '', phone: '', shippingMethod: '7-11', storeInfo: '', paymentMethod: 'COD', note: ''
   });
   const [usePoints, setUsePoints] = useState(false);
 
-  // 商品管理
+  // 商品資料結構更新：支援多圖 (images 陣列)
   const [products, setProducts] = useState([
-    { id: 'p1', name: '經典燕麥色法式襯衫', price: 680, category: '服飾飾品', image: 'https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=500&q=80', tag: '現貨' },
-    { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80', tag: '預購' }
+    { id: 'p1', name: '經典燕麥色法式襯衫', price: 680, category: '服飾飾品', images: ['https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=500&q=80', 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80'], tag: '現貨' },
+    { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', images: ['https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80'], tag: '預購' }
   ]);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [productForm, setProductForm] = useState({ name: '', price: '', category: '服飾飾品', image: '', tag: '' });
+  const [productForm, setProductForm] = useState({ name: '', price: '', category: '服飾飾品', imageInput: '', tag: '' });
 
-  // 訂單管理與批次處理
   const [orders, setOrders] = useState([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
 
@@ -65,11 +59,12 @@ export default function LumoStore() {
   const currentPoints = members[formData.phone] || members[currentUserPhone] || 0;
   const maxDiscountAmount = Math.floor(currentPoints / 100);
   const discountAmount = usePoints ? Math.min(maxDiscountAmount, subtotal) : 0;
-  // 運費固定 38
-  const shippingFee = 38;
+  
+  // 運費變更為 60
+  const shippingFee = 60;
   const finalTotal = Math.max(0, subtotal + shippingFee - discountAmount);
 
-  // ================= 核心功能：前台 =================
+  // ================= 功能：前台 =================
   const handleLogin = (e) => {
     e.preventDefault();
     if (loginPhoneInput.length >= 8) {
@@ -108,34 +103,57 @@ export default function LumoStore() {
       items: cartItemDetails,
       logistics: '711',
       shippingFee: shippingFee,
-      subtotal, discount: discountAmount, total: finalTotal, status: '待出貨', paymentStatus: formData.paymentMethod === 'COD' ? '未付款' : '已付款'
+      subtotal, discount: discountAmount, total: finalTotal, status: '待處理', 
+      paymentStatus: formData.paymentMethod === 'COD' ? '未付款 (貨到付款)' : '未付款 (待轉帳)'
     };
 
     setOrders([newOrder, ...orders]);
     setMembers(prev => ({
       ...prev,
-      [phoneToUse]: (prev[phoneToUse] || 0) - (discountAmount * 100) + Math.max(0, finalTotal - shippingFee) // 運費不計入點數
+      [phoneToUse]: (prev[phoneToUse] || 0) - (discountAmount * 100) + Math.max(0, finalTotal - shippingFee)
     }));
     setCart({}); setCheckoutStep(false); setCartOpen(false); setUsePoints(false);
     alert(`🎉 訂單已送出！\n本次消費獲得 ${Math.max(0, finalTotal - shippingFee)} 點。`);
   };
 
-  // ================= 核心功能：後台商品與分類 =================
+  const handleCopyBank = () => {
+    navigator.clipboard.writeText('88611238224675');
+    setCopiedBank(true);
+    setTimeout(() => setCopiedBank(false), 2000);
+  };
+
+  // ================= 功能：後台管理 =================
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (adminPwdInput === '1510') setAdminAuthenticated(true);
     else { alert('密碼錯誤！'); setAdminPwdInput(''); }
   };
 
+  // 訂單付款狀態切換
+  const togglePaymentStatus = (id) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id === id) {
+        const isPaid = o.paymentStatus.includes('已付款');
+        return { ...o, paymentStatus: isPaid ? '未付款' : '已付款' };
+      }
+      return o;
+    }));
+  };
+
+  // 商品儲存 (處理多圖)
   const saveProduct = (e) => {
     e.preventDefault();
+    const imageArray = productForm.imageInput.split(/[\n,]+/).map(url => url.trim()).filter(Boolean);
+    const newProduct = { ...productForm, images: imageArray };
+    delete newProduct.imageInput;
+
     if (editingProduct) {
-      setProducts(products.map(p => p.id === editingProduct.id ? { ...productForm, id: p.id } : p));
+      setProducts(products.map(p => p.id === editingProduct.id ? { ...newProduct, id: p.id } : p));
     } else {
-      setProducts([{ ...productForm, id: `p${Date.now()}` }, ...products]);
+      setProducts([{ ...newProduct, id: `p${Date.now()}` }, ...products]);
     }
     setEditingProduct(null);
-    setProductForm({ name: '', price: '', category: categories[0] || '', image: '', tag: '' });
+    setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '' });
   };
 
   const handleAddCategory = () => {
@@ -150,17 +168,6 @@ export default function LumoStore() {
     if (selectedCategory === cat) setSelectedCategory('全部');
   };
 
-  const moveCategory = (index, direction) => {
-    const newCats = [...categories];
-    if (direction === 'up' && index > 0) {
-      [newCats[index - 1], newCats[index]] = [newCats[index], newCats[index - 1]];
-    } else if (direction === 'down' && index < newCats.length - 1) {
-      [newCats[index + 1], newCats[index]] = [newCats[index], newCats[index + 1]];
-    }
-    setCategories(newCats);
-  };
-
-  // ================= 核心功能：後台匯出與列印 (完整植入) =================
   const handleSelectOrder = (id) => {
     setSelectedOrderIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
@@ -179,9 +186,7 @@ export default function LumoStore() {
     ];
 
     const dataRows = ordersToExport.map(order => {
-      const websiteTotal = Number(order.total) || 0;
-      let collectionAmount = Math.max(0, websiteTotal - 38);
-      if (order.paymentStatus === '已付款') collectionAmount = 20;
+      let collectionAmount = order.paymentStatus.includes('已付款') ? 0 : order.total;
 
       const rawStoreName = order.storeInfo || '';
       let storeId = getSevenStoreId(rawStoreName);
@@ -195,7 +200,7 @@ export default function LumoStore() {
 
       return [
         order.name || '', order.phone || '', storeId || '', "常溫", "服飾飾品",
-        collectionAmount, 38, dateStr, order.note || '', "", ""
+        collectionAmount, shippingFee, dateStr, order.note || '', "", ""
       ];
     });
 
@@ -205,22 +210,21 @@ export default function LumoStore() {
     const worksheet = XLSX.utils.aoa_to_sheet(finalData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "7-11匯入單");
-    const fileName = `賣貨便匯入單_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
+    XLSX.writeFile(workbook, `賣貨便匯入單_${new Date().toISOString().split('T')[0]}.xlsx`);
 
     if (problemOrders.length > 0) {
-      const errorDetail = problemOrders.map(o => `● 訂單 #${o.orderId} (門市: ${o.storeInfo || '未填寫'})`).join('\n');
-      alert(`⚠️ 匯出完成，但有 ${problemOrders.length} 筆資料缺少店號！\n\n請手動檢查以下訂單：\n${errorDetail}`);
+      alert(`⚠️ 匯出完成，但有 ${problemOrders.length} 筆資料缺少店號！\n請手動檢查。`);
     } else {
-      alert("✅ 匯出成功！格式已符合賣貨便要求。");
+      alert("✅ 匯出成功！訂單已自動轉為「已出貨」。");
+      setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
+      setSelectedOrderIds([]);
     }
   };
 
-  const printOrder = (input) => {
-    if (!input) return;
-    const ordersToPrint = Array.isArray(input) ? input : [input];
-    if (ordersToPrint.length === 0) return;
-
+  const handleBulkPrint = () => {
+    if (selectedOrderIds.length === 0) return alert("請先選擇訂單");
+    const ordersToPrint = orders.filter(o => selectedOrderIds.includes(o.id));
+    
     const printWindow = window.open('', '_blank');
     const ordersHtml = ordersToPrint.map((order, index) => {
       const displayNote = (order.note || '無').replace(/\n/g, '<br/>');
@@ -235,7 +239,7 @@ export default function LumoStore() {
           </div>
           <div class="info-section">
             <div class="info-row"><span class="info-label">收件人：</span><span>${order.name} / ${order.phone}</span></div>
-            <div class="info-row"><span class="info-label">物流：</span><span>7-11 超商取貨</span></div>
+            <div class="info-row"><span class="info-label">狀態：</span><span>${order.paymentStatus}</span></div>
             <div class="info-row"><span class="info-label">地址：</span><span style="font-size:9px;">門市：${order.storeInfo || '無'}</span></div>
             <div class="info-row"><span class="info-label">備註：</span><span style="font-size:9px; font-weight:bold;">${displayNote}</span></div>
           </div>
@@ -244,7 +248,7 @@ export default function LumoStore() {
             <tbody>
               ${order.items.map((item, idx) => `
                 <tr>
-                  <td style="padding:2px; vertical-align:top;"><img src="${item.image}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;"></td>
+                  <td style="padding:2px; vertical-align:top;"><img src="${item.images?.[0]}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;"></td>
                   <td style="vertical-align:top; padding-top:4px;"><div style="line-height:1.4;font-weight:bold;">${idx + 1}. ${item.name}</div></td>
                   <td style="text-align:center;vertical-align:middle;font-weight:bold;">${item.qty}</td>
                   <td style="text-align:right;vertical-align:middle;">$${item.price}</td>
@@ -253,66 +257,64 @@ export default function LumoStore() {
             </tbody>
           </table>
           <div class="totals-section">
-            <div class="total-row"><span>商品小計：</span><span>$${order.subtotal}</span></div>
-            <div class="total-row"><span>運費：</span><span>+$${order.shippingFee}</span></div>
-            ${order.discount > 0 ? `<div class="total-row text-red"><span>點數折抵：</span><span>-$${order.discount}</span></div>` : ''}
-            <div class="total-row final"><span>總金額：</span><span>NT$ ${order.total}</span></div>
+            <div class="total-row final"><span>代收總額：</span><span>NT$ ${order.paymentStatus.includes('已付款') ? '0 (已付款)' : order.total}</span></div>
           </div>
         </div>
       `;
     }).join('');
 
-    const htmlContent = `
-      <html><head><title>出貨單列印</title>
-      <style>
-        @page { size: A6; margin: 0; }
-        body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; background: #fff; color: #000; }
-        .page { width: 105mm; padding: 5mm; box-sizing: border-box; font-size: 10px; line-height: 1.3; }
-        .page-break { page-break-after: always; }
-        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
-        .header h1 { margin: 0; font-size: 16px; letter-spacing: 1px; }
-        .info-section { margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-        .info-row { display: flex; margin-bottom: 2px; }
-        .info-label { width: 45px; color: #666; font-weight: bold; flex-shrink: 0; }
-        table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 5px; }
-        th { text-align: left; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9; }
-        td { border-bottom: 1px dashed #ddd; padding: 4px 2px; }
-        .totals-section { border-top: 1px solid #000; padding-top: 5px; font-size: 10px; }
-        .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-        .total-row.text-red { color: #d32f2f; }
-        .total-row.final { font-weight: bold; font-size: 14px; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
-      </style></head>
-      <body>${ordersHtml}<script>window.onload = function() { setTimeout(() => window.print(), 500); }</script></body></html>
-    `;
-    printWindow.document.write(htmlContent);
+    printWindow.document.write(`
+      <html><head><title>出貨單列印</title><style>
+      @page { size: A6; margin: 0; }
+      body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; background: #fff; color: #000; }
+      .page { width: 105mm; padding: 5mm; box-sizing: border-box; font-size: 10px; line-height: 1.3; }
+      .page-break { page-break-after: always; }
+      .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
+      .header h1 { margin: 0; font-size: 16px; letter-spacing: 1px; }
+      .info-section { margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+      .info-row { display: flex; margin-bottom: 2px; }
+      .info-label { width: 45px; color: #666; font-weight: bold; flex-shrink: 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 5px; }
+      th { text-align: left; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9; }
+      td { border-bottom: 1px dashed #ddd; padding: 4px 2px; }
+      .totals-section { border-top: 1px solid #000; padding-top: 5px; font-size: 10px; }
+      .total-row.final { font-weight: bold; font-size: 14px; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
+      </style></head><body>${ordersHtml}<script>window.onload = function() { setTimeout(() => window.print(), 500); }</script></body></html>
+    `);
     printWindow.document.close();
+    setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: '已出貨' } : o));
+    setSelectedOrderIds([]);
   };
 
-  const handleBulkPrint = () => {
-    if (selectedOrderIds.length === 0) return alert("請先選擇訂單");
-    printOrder(orders.filter(o => selectedOrderIds.includes(o.id)));
-  };
-
-  // ================= 介面渲染 =================
   return (
     <div className="min-h-screen bg-[#FAF6F0] text-[#4A403A] font-sans selection:bg-[#D3C2AD] selection:text-white">
-      {/* 導覽列 */}
+      {/* 導覽列：置中 Logo 設計 */}
       <header className="bg-white/90 backdrop-blur-md border-b border-[#E8DED1] sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setIsAdmin(false); setCartOpen(false); }}>
-            <div className="h-9 w-20 bg-[#D3C2AD] rounded-lg flex items-center justify-center shadow-inner">
+        <div className="max-w-4xl mx-auto px-4 h-16 grid grid-cols-3 items-center">
+          <div></div> {/* 左側留白平衡 */}
+          
+          <div className="flex justify-center cursor-pointer" onClick={() => { setIsAdmin(false); setCartOpen(false); }}>
+            <div className="h-9 w-24 bg-[#D3C2AD] rounded-lg flex items-center justify-center shadow-inner">
               <span className="text-white font-serif tracking-[0.2em] font-bold text-lg">LUMO</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsAdmin(true)} className="text-xs px-3 py-1.5 rounded-full border border-[#D3C2AD] text-[#7A6B63] hover:bg-[#F3ECE1] transition">後台管理</button>
+
+          <div className="flex items-center justify-end gap-3">
+            <button onClick={() => setIsAdmin(!isAdmin)} className="text-xs px-2 sm:px-3 py-1.5 rounded-full border border-[#D3C2AD] text-[#7A6B63] hover:bg-[#F3ECE1] transition">
+              {isAdmin ? '回前台' : '管理'}
+            </button>
             {!isAdmin && (
               <button onClick={() => setCartOpen(true)} className="relative p-2 bg-[#F3ECE1] rounded-full hover:bg-[#E8DED1] transition z-50">
-                <ShoppingBag size={20} />
+                <ShoppingBag size={18} />
                 {cartItemDetails.length > 0 && <span className="absolute -top-1 -right-1 bg-[#A67C52] text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">{cartItemDetails.reduce((a, c) => a + c.qty, 0)}</span>}
               </button>
             )}
           </div>
+        </div>
+        
+        {/* 點數活動跑馬燈公告 */}
+        <div className="bg-[#A67C52] text-white text-[11px] sm:text-xs text-center py-1.5 tracking-wide font-medium">
+          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $1！
         </div>
       </header>
 
@@ -338,23 +340,33 @@ export default function LumoStore() {
                 ))}
               </div>
 
-              {/* 訂單管理分頁 */}
               {adminTab === 'orders' && (
                 <div className="space-y-4">
                   <div className="flex gap-2 justify-end mb-4">
-                    <button onClick={handleExport711Excel} className="bg-[#10b981] hover:bg-[#059669] text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><Download size={14} /> 匯出7-11寄件單</button>
-                    <button onClick={handleBulkPrint} className="bg-[#4b5563] hover:bg-[#374151] text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><Printer size={14} /> 批量列印A6出貨單</button>
+                    <button onClick={handleExport711Excel} className="bg-[#10b981] hover:bg-[#059669] text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><Download size={14} /> 匯出7-11</button>
+                    <button onClick={handleBulkPrint} className="bg-[#4b5563] hover:bg-[#374151] text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1"><Printer size={14} /> 列印出貨單</button>
                   </div>
                   {orders.length === 0 ? <p className="text-center py-10 text-[#8C7A70]">目前尚無訂單</p> : 
                     orders.map(ord => (
-                      <div key={ord.id} className="bg-white rounded-xl p-5 border border-[#E8DED1] shadow-sm flex gap-4">
+                      <div key={ord.id} className={`bg-white rounded-xl p-5 border shadow-sm flex gap-4 transition ${selectedOrderIds.includes(ord.id) ? 'border-[#A67C52] ring-1 ring-[#A67C52]' : 'border-[#E8DED1]'}`}>
                         <button onClick={() => handleSelectOrder(ord.id)} className="pt-1 text-[#A67C52]">
                           {selectedOrderIds.includes(ord.id) ? <CheckSquare size={20} /> : <Square size={20} />}
                         </button>
                         <div className="flex-1 text-sm">
-                          <div className="flex justify-between items-center mb-3 border-b pb-2">
+                          <div className="flex flex-wrap gap-2 justify-between items-center mb-3 border-b pb-2">
                             <span className="font-bold">{ord.id}</span>
-                            <span className="bg-[#EBF3E8] text-[#486940] px-2 py-1 rounded-full text-[10px]">{ord.status}</span>
+                            <div className="flex gap-2">
+                              {/* 點擊切換付款狀態按鈕 */}
+                              <button 
+                                onClick={() => togglePaymentStatus(ord.id)}
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${ord.paymentStatus.includes('已付款') ? 'bg-[#dcfce7] text-[#166534] hover:bg-[#bbf7d0]' : 'bg-[#fee2e2] text-[#991b1b] hover:bg-[#fecaca]'}`}
+                              >
+                                {ord.paymentStatus} (點擊切換)
+                              </button>
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] ${ord.status === '已出貨' ? 'bg-[#E5E7EB] text-[#4B5563]' : 'bg-[#EBF3E8] text-[#486940]'}`}>
+                                {ord.status}
+                              </span>
+                            </div>
                           </div>
                           <p>顧客：{ord.name} ({ord.phone})</p>
                           <p>門市：{ord.storeInfo}</p>
@@ -366,7 +378,6 @@ export default function LumoStore() {
                 </div>
               )}
 
-              {/* 商品管理分頁 */}
               {adminTab === 'products' && (
                 <div className="grid md:grid-cols-2 gap-6">
                   <form onSubmit={saveProduct} className="bg-white p-5 rounded-2xl border border-[#E8DED1] space-y-4 shadow-sm h-fit">
@@ -377,45 +388,34 @@ export default function LumoStore() {
                       {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <input type="text" placeholder="自訂標籤 (如：現貨)" value={productForm.tag} onChange={e => setProductForm({...productForm, tag: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
-                    <input type="url" placeholder="圖片網址 (URL)" required value={productForm.image} onChange={e => setProductForm({...productForm, image: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
+                    
+                    {/* 多圖輸入區塊 */}
+                    <div>
+                      <label className="block text-xs font-bold text-[#7A6B63] mb-1">圖片網址 (多張請用逗號或換行隔開)</label>
+                      <textarea 
+                        required 
+                        placeholder="https://image1.jpg,&#10;https://image2.jpg" 
+                        value={productForm.imageInput} 
+                        onChange={e => setProductForm({...productForm, imageInput: e.target.value})} 
+                        className="w-full border px-3 py-2 rounded-lg text-sm h-24"
+                      ></textarea>
+                    </div>
+
                     <div className="flex gap-2">
                       <button type="submit" className="flex-1 bg-[#D3C2AD] text-white py-2 rounded-lg font-bold text-sm">儲存</button>
-                      {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setProductForm({ name: '', price: '', category: categories[0], image: '', tag: '' });}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm">取消</button>}
+                      {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setProductForm({ name: '', price: '', category: categories[0], imageInput: '', tag: '' });}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm">取消</button>}
                     </div>
                   </form>
                   <div className="space-y-3">
                     {products.map(p => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
-                        <img src={p.image} className="w-16 h-16 object-cover rounded-lg" />
+                        <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" />
                         <div className="flex-1">
                           <h4 className="font-bold text-sm">{p.name}</h4>
-                          <div className="text-[#8C7A70] text-xs">{p.category}</div>
+                          <div className="text-[#8C7A70] text-[11px]">共 {p.images.length} 張圖</div>
                           <span className="text-[#A67C52] text-xs font-bold">${p.price}</span>
                         </div>
-                        <button onClick={() => {setEditingProduct(p); setProductForm(p);}} className="text-[#A67C52] p-1.5"><Edit2 size={14} /></button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 分類管理分頁 */}
-              {adminTab === 'categories' && (
-                <div className="max-w-md bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm">
-                  <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">前台分類設定</h3>
-                  <div className="flex gap-2 mb-4">
-                    <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="新增分類名稱" className="flex-1 border px-3 py-2 rounded-lg text-sm" />
-                    <button onClick={handleAddCategory} className="bg-[#D3C2AD] text-white px-4 py-2 rounded-lg font-bold text-sm">新增</button>
-                  </div>
-                  <div className="space-y-2">
-                    {categories.map((cat, idx) => (
-                      <div key={cat} className="flex justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1]">
-                        <span className="font-bold text-sm">{cat}</span>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => moveCategory(idx, 'up')} className="p-1 text-gray-500 hover:text-black">↑</button>
-                          <button onClick={() => moveCategory(idx, 'down')} className="p-1 text-gray-500 hover:text-black">↓</button>
-                          <button onClick={() => deleteCategory(cat)} className="p-1 text-red-400 ml-2"><Trash2 size={14}/></button>
-                        </div>
+                        <button onClick={() => {setEditingProduct(p); setProductForm({...p, imageInput: p.images.join('\n')});}} className="text-[#A67C52] p-1.5"><Edit2 size={14} /></button>
                       </div>
                     ))}
                   </div>
@@ -425,36 +425,8 @@ export default function LumoStore() {
           )}
         </main>
       ) : (
-        /* ================= 前台購物與客寶專區 ================= */
+        /* ================= 前台購物與展示 ================= */
         <main className="max-w-4xl mx-auto px-4 py-8">
-          
-          {/* 客寶查詢專區 */}
-          <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
-            <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
-            <div className="flex gap-2 mb-4">
-              <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
-              <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
-            </div>
-            
-            {searchedOrders !== null && (
-              <div className="mt-4 pt-4 border-t border-[#F0EAE1]">
-                <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone] || 0}</span> 點</p>
-                {searchedOrders.length === 0 ? <p className="text-xs text-gray-500">查無訂單紀錄。</p> : (
-                  <div className="space-y-3">
-                    {searchedOrders.map(ord => (
-                      <div key={ord.id} className="bg-[#FAF6F0] p-3 rounded-xl border border-[#E8DED1] text-xs">
-                        <div className="flex justify-between font-bold mb-1"><span>單號: {ord.id}</span><span className="text-[#A67C52]">{ord.status}</span></div>
-                        <p>金額: ${ord.total}</p>
-                        <p className="text-gray-500 mt-1">門市: {ord.storeInfo}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 商品分類過濾 */}
           <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none mb-6 pb-2">
             <button onClick={() => setSelectedCategory('全部')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${selectedCategory === '全部' ? 'bg-[#4A403A] text-white' : 'bg-white border border-[#E8DED1] text-[#7A6B63]'}`}>全部商品</button>
             {categories.map(cat => (
@@ -462,19 +434,30 @@ export default function LumoStore() {
             ))}
           </div>
 
-          {/* 商品列表 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {/* ⚡️ 一行兩格商品列 (Mobile: grid-cols-2, PC: grid-cols-3) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
             {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
-              <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-[#E8DED1] shadow-sm group">
-                <div className="h-56 overflow-hidden relative">
-                  <img src={product.image} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                  {product.tag && <span className="absolute top-3 left-3 text-xs bg-white/95 px-2.5 py-1 rounded-full font-bold text-[#7A6B63] shadow-sm">{product.tag}</span>}
+              <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-[#E8DED1] shadow-sm group flex flex-col">
+                {/* 支援左右滑動的多圖展示 */}
+                <div className="h-40 sm:h-56 flex overflow-x-auto snap-x snap-mandatory scrollbar-none relative">
+                  {product.images?.map((img, idx) => (
+                    <img key={idx} src={img} className="w-full h-full object-cover shrink-0 snap-center transition duration-500" />
+                  ))}
+                  {product.tag && <span className="absolute top-2 left-2 text-[10px] sm:text-xs bg-white/90 px-2 py-1 rounded-full font-bold text-[#7A6B63] shadow-sm">{product.tag}</span>}
+                  {product.images?.length > 1 && (
+                    <div className="absolute bottom-2 right-2 bg-black/40 text-white text-[9px] px-1.5 py-0.5 rounded-md pointer-events-none">
+                      1 / {product.images.length}
+                    </div>
+                  )}
                 </div>
-                <div className="p-4 space-y-2">
-                  <h3 className="font-bold text-[#4A403A] truncate">{product.name}</h3>
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="font-bold text-[#A67C52]">${product.price}</span>
-                    <button onClick={() => updateQty(product.id, 1)} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-xs px-4 py-2 rounded-xl font-medium transition">加入購物車</button>
+                
+                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2">
+                  <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight">{product.name}</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
+                    <span className="font-bold text-[#A67C52] text-sm">${product.price}</span>
+                    <button onClick={() => updateQty(product.id, 1)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center">
+                      加入
+                    </button>
                   </div>
                 </div>
               </div>
@@ -501,9 +484,9 @@ export default function LumoStore() {
                 cartItemDetails.length === 0 ? <div className="text-center py-20 text-[#8C7A70] text-sm">購物車目前是空的</div> : (
                   cartItemDetails.map((item) => (
                     <div key={item.id} className="flex gap-3 p-3 rounded-xl border border-[#F0EAE1] bg-[#FAF6F0]/40">
-                      <img src={item.image} className="w-16 h-16 object-cover rounded-lg" />
-                      <div className="flex-1">
-                        <h4 className="text-xs font-bold">{item.name}</h4>
+                      <img src={item.images?.[0]} className="w-16 h-16 object-cover rounded-lg" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold truncate">{item.name}</h4>
                         <div className="text-xs text-[#A67C52] font-semibold mt-1">${item.price}</div>
                         <div className="flex items-center gap-2 mt-2">
                           <button onClick={() => updateQty(item.id, -1)} className="p-1 rounded bg-white border"><Minus size={12} /></button>
@@ -518,9 +501,34 @@ export default function LumoStore() {
                 <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4 text-sm">
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">姓名 *</label><input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">手機號碼 *</label><input type="tel" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
-                  <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">取貨方式 *</label><div className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-500">7-11 超商取貨 (運費 $38)</div></div>
+                  
+                  {/* 付款方式選項 */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#7A6B63] mb-1">付款方式 *</label>
+                    <select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full border px-3 py-2 rounded-lg">
+                      <option value="COD">貨到付款</option>
+                      <option value="Bank">銀行轉帳</option>
+                    </select>
+                  </div>
+
+                  {/* 選擇銀行轉帳時，顯示匯款帳號 */}
+                  {formData.paymentMethod === 'Bank' && (
+                    <div className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-[#7A6B63] text-xs">
+                      <p className="font-bold text-[#A67C52] mb-2">💰 請匯款至以下帳戶：</p>
+                      <p>銀行代碼：<span className="font-bold">將來銀行 (823)</span></p>
+                      <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border mt-2">
+                        <span className="font-mono font-bold text-[#4A403A] text-sm tracking-wider">88611238224675</span>
+                        <button type="button" onClick={handleCopyBank} className="text-[#A67C52] flex items-center gap-1 font-bold">
+                          {copiedBank ? <CheckCircle size={14} className="text-green-500" /> : <Copy size={14} />}
+                          {copiedBank ? '已複製' : '複製'}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[#8C7A70] text-[11px]">⚠️ 匯款完成後，請主動聯繫官方 Line 或 IG 客服確認對帳唷！</p>
+                    </div>
+                  )}
+
+                  <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">取貨方式 *</label><div className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-500">7-11 超商取貨 (運費 $60)</div></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">門市名稱與店號 (六碼) *</label><input type="text" required placeholder="例：鑫華門市 (981245)" value={formData.storeInfo} onChange={e => setFormData({...formData, storeInfo: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
-                  <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">備註</label><textarea value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className="w-full border px-3 py-2 rounded-lg h-16"></textarea></div>
                   
                   {currentPoints > 0 && (
                     <div className="p-3 bg-[#FAF6F0] rounded-xl border border-[#E8DED1]">
