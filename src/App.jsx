@@ -30,9 +30,14 @@ export default function LumoStore() {
   const [categories, setCategories] = useState(['服飾飾品', '生活選物', '客製設計']);
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [formData, setFormData] = useState({
-    name: '', phone: '', shippingMethod: '7-11', storeInfo: '', paymentMethod: 'COD', note: ''
+ const [formData, setFormData] = useState(() => {
+    const saved = localStorage.getItem('lumo_last_form');
+    if (saved) return JSON.parse(saved);
+    return { name: '', phone: '', shippingMethod: '7-11', storeInfo: '', paymentMethod: 'COD', note: '' };
   });
+
+  // 每次 formData 更新時，默默記在 localStorage
+  useEffect(() => { localStorage.setItem('lumo_last_form', JSON.stringify(formData)); }, [formData]);
   const [usePoints, setUsePoints] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
  const [productForm, setProductForm] = useState({ 
@@ -351,19 +356,26 @@ const handleAddClick = (product) => {
                 <div class="info-row"><span class="info-label">備註：</span><span style="font-size:9px; line-height:1.2; color:#333; font-weight:bold;">${displayNote}</span></div>
             </div>
 
-            <table>
+           <table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 5px; table-layout: fixed;">
                 <thead>
                     <tr>
-                        <th width="40">圖片</th>
-                        <th>品名 / 規格</th>
-                        <th width="25" style="text-align:center">數</th>
-                        <th width="35" style="text-align:right">單價</th>
+                        <th style="width: 40px; text-align: left; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9;">圖片</th>
+                        <th style="width: auto; text-align: left; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9;">品名 / 規格</th>
+                        <th style="width: 30px; text-align: center; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9;">數</th>
+                        <th style="width: 40px; text-align: right; border-bottom: 1px solid #000; padding: 3px 2px; background: #f9f9f9;">單價</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${order.items ? order.items.map((item, idx) => {
                         const imgUrl = item.image || item.images?.[0] || null;
                         
+                        // 加入雙規格顯示
+                        let specHtml = '';
+                        if(item.selectedSpec1 || item.selectedSpec2) {
+                            specHtml = `<div style="color:#666; font-size:9px; margin-top:2px;">規格: ${item.selectedSpec1} ${item.selectedSpec2 ? '/ '+item.selectedSpec2 : ''}</div>`;
+                        }
+
+                        // 客製化備註
                         let customTextHtml = '';
                         if (item.nailCustomization) {
                             const label = (item.selectedVariant === '補甲' || item.customImageUrl) ? '補甲' : '客製';
@@ -372,33 +384,20 @@ const handleAddClick = (product) => {
 
                         return `
                         <tr>
-                            <td style="padding:2px; vertical-align:top;">
+                            <td style="padding:2px; vertical-align:top; border-bottom: 1px dashed #ddd;">
                                 ${imgUrl ? `<img src="${imgUrl}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:1px solid #eee;">` : '<span style="color:#ccc;font-size:8px;">無圖</span>'}
                             </td>
                             
-                            <td style="vertical-align:top; padding-top:4px;">
-                                <td style="vertical-align:top; padding-top:4px;">
-                                <div style="line-height:1.4;font-weight:bold;">
+                            <td style="vertical-align:top; padding:4px 2px 4px 0; border-bottom: 1px dashed #ddd; word-wrap: break-word;">
+                                <div style="line-height:1.4; font-weight:bold;">
                                     ${idx + 1}. ${item.name}
                                     ${Number(item.stock) <= 0 ? `<span style="color:#d32f2f;font-size:9px;border:1px solid #d32f2f;padding:1px 3px;margin-left:4px;border-radius:2px;">預購</span>` : ''}
                                 </div>
+                                ${specHtml}
                                 ${customTextHtml}
                             </td>
-                                    
-                                    ${(() => {
-                                        if (item.spotQty !== undefined && item.preorderQty !== undefined) {
-                                            if (item.spotQty > 0 && item.preorderQty > 0) return `<span style="font-size:9px; color:#16a34a; margin-left:4px; font-weight:bold;">[含預購 ${item.preorderQty}]</span>`;
-                                            else if (item.preorderQty > 0) return `<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>`;
-                                            else return '';
-                                        }
-                                        return item.isPreOrder ? '<span style="font-size:9px; border:1px solid #000; padding:1px 4px; margin-left:4px; border-radius:2px;">預購</span>' : '';
-                                    })()}
-                                </div>
-                                ${item.selectedVariant ? `<div style="color:#666;font-size:9px;margin-top:2px;">規格: ${item.selectedVariant}</div>` : ''}
-                                ${customTextHtml}
-                            </td>
-                            <td style="text-align:center;vertical-align:middle;font-weight:bold;">${item.quantity || item.qty || 1}</td>
-                            <td style="text-align:right;vertical-align:middle;">$${item.price}</td>
+                            <td style="text-align:center; vertical-align:middle; font-weight:bold; border-bottom: 1px dashed #ddd;">${item.quantity || item.qty || 1}</td>
+                            <td style="text-align:right; vertical-align:middle; border-bottom: 1px dashed #ddd;">$${item.price}</td>
                         </tr>
                         `;
                     }).join('') : ''}
@@ -551,9 +550,11 @@ const handleAddClick = (product) => {
                               >
                                 {ord.paymentStatus}
                               </button>
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] ${ord.status === '已出貨' ? 'bg-[#E5E7EB] text-[#4B5563]' : 'bg-[#EBF3E8] text-[#486940]'}`}>
-                                {ord.status}
-                              </span>
+                            <button 
+  onClick={() => setOrders(prev => prev.map(o => o.id === ord.id ? { ...o, status: o.status === '已出貨' ? '待處理' : '已出貨' } : o))}
+  className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${ord.status === '已出貨' ? 'bg-[#E5E7EB] text-[#4B5563] hover:bg-[#d1d5db]' : 'bg-[#EBF3E8] text-[#486940] hover:bg-[#dcfce7]'}`}>
+  {ord.status}
+</button>
                             </div>
                           </div>
                           <p>顧客：{ord.name} ({ord.phone})</p>
@@ -618,7 +619,8 @@ const handleAddClick = (product) => {
                           <div className="text-[#8C7A70] text-[11px]">共 {p.images.length} 張圖</div>
                           <span className="text-[#A67C52] text-xs font-bold">${p.price}</span>
                         </div>
-                        <button onClick={() => {setEditingProduct(p); setProductForm({...p, imageInput: p.images.join('\n')});}} className="text-[#A67C52] p-1.5"><Edit2 size={14} /></button>
+                      <button onClick={() => {setEditingProduct(p); setProductForm({...p, imageInput: p.images.join('\n'), spec1Options: p.spec1Options?.join(',') || '', spec2Options: p.spec2Options?.join(',') || '' });}} className="text-[#A67C52] p-1.5"><Edit2 size={14} /></button>
+<button onClick={() => { if(window.confirm('確定要刪除此商品嗎？')) setProducts(prev => prev.filter(prod => prod.id !== p.id)); }} className="text-red-400 p-1.5"><Trash2 size={14} /></button>
                       </div>
                     ))}
                   </div>
@@ -646,29 +648,7 @@ const handleAddClick = (product) => {
                 </div>
               )}
 
-{/* --- 👇 步驟4 新增：分類管理介面 --- */}
-              {adminTab === 'categories' && (
-                <div className="max-w-md bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm">
-                  <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">前台分類設定</h3>
-                  <div className="flex gap-2 mb-4">
-                    <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="新增分類名稱" className="flex-1 border px-3 py-2 rounded-lg text-sm" />
-                    <button onClick={handleAddCategory} className="bg-[#D3C2AD] text-white px-4 py-2 rounded-lg font-bold text-sm">新增</button>
-                  </div>
-                  <div className="space-y-2">
-                    {categories.map((cat, idx) => (
-                      <div key={cat} className="flex justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1]">
-                        <span className="font-bold text-sm">{cat}</span>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => moveCategory(idx, 'up')} className="p-1 text-gray-500 hover:text-black">↑</button>
-                          <button onClick={() => moveCategory(idx, 'down')} className="p-1 text-gray-500 hover:text-black">↓</button>
-                          <button onClick={() => deleteCategory(cat)} className="p-1 text-red-400 ml-2"><Trash2 size={14}/></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* --- 👆 結束 --- */}
+
 
 
               {/* ★ 完整找回的後台分類管理 (含排序按鈕) */}
@@ -709,28 +689,37 @@ const handleAddClick = (product) => {
               <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
             </div>
             
-            {searchedOrders !== null && (
-              <div className="mt-4 pt-4 border-t border-[#F0EAE1]">
-               <p className="text-sm font-bold mb-3">歡迎回來，客寶！您目前累積點數：<span className="text-[#A67C52] text-lg">{members[searchPhone.trim()] || 0}</span> 點</p>
-                {searchedOrders.length === 0 ? <p className="text-xs text-gray-500">查無訂單紀錄。</p> : (
-                  <div className="space-y-3">
-                    {searchedOrders.map(ord => (
-                      <div key={ord.id} className="bg-[#FAF6F0] p-3 rounded-xl border border-[#E8DED1] text-xs">
-                        <div className="flex justify-between font-bold mb-1">
-                          <span>單號: {ord.id}</span>
-                          <span className={`${ord.status === '已出貨' ? 'text-gray-500' : 'text-[#A67C52]'}`}>{ord.status}</span>
-                        </div>
-                        <p>金額: ${ord.total}</p>
-                        <p className="text-gray-500 mt-1">門市: {ord.storeName}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          {searchedOrders.map(ord => (
+  <div key={ord.id} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-xs mb-3 shadow-sm relative overflow-hidden">
+    <div className="absolute top-0 left-0 w-1 h-full bg-[#A67C52]"></div>
+    <div className="flex justify-between font-bold mb-2 pb-2 border-b border-[#E8DED1]">
+      <span className="text-[#4A403A]">單號: {ord.id}</span>
+      <span className={`px-2 py-0.5 rounded ${ord.status === '已出貨' ? 'bg-gray-200 text-gray-600' : 'bg-[#EBF3E8] text-[#486940]'}`}>{ord.status}</span>
+    </div>
+    
+    <div className="space-y-1.5 mb-3">
+      {ord.items?.map((item, i) => (
+        <div key={i} className="flex justify-between text-[#7A6B63]">
+          <span className="truncate pr-2">
+            {item.name} {item.selectedSpec1 || item.selectedSpec2 ? `(${item.selectedSpec1} ${item.selectedSpec2})` : ''} x{item.quantity}
+          </span>
+          <span>${item.price * item.quantity}</span>
+        </div>
+      ))}
+    </div>
 
-        
+    <div className="bg-white p-2 rounded border border-[#E8DED1] text-[#8C7A70] mb-2">
+      📍 取件門市：<span className="font-bold text-[#4A403A]">{ord.storeName || '未填寫'}</span>
+    </div>
+
+    <div className="flex justify-between items-end pt-2 border-t border-[#E8DED1]">
+      <span className="text-[10px] text-gray-400">{ord.paymentStatus}</span>
+   <span className="font-bold text-sm text-[#A67C52]">總額: ${ord.total}</span>
+        </div>
+      </div>
+    ))}
+                  </div>
+                  
           {/* ⚡️ 一行兩格商品列 (Mobile: grid-cols-2, PC: grid-cols-3) */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
             {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
@@ -749,60 +738,85 @@ const handleAddClick = (product) => {
                 </div>
                 
                 <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2">
-                  <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight">
-  {product.name}
-  {Number(product.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
-</h3>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
-                    <span className="font-bold text-[#A67C52] text-sm">${product.price}</span>
-                   <button onClick={() => handleAddClick(product)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center">加入</button>
-                  </div>
-                </div>
+                 <div className="cursor-pointer" onClick={() => setActiveProduct({...product, viewOnly: true})}>
+  <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight hover:text-[#A67C52] transition">
+    {product.name}
+    {Number(product.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+  </h3>
+  <p className="text-[10px] text-[#8C7A70] line-clamp-2 mt-1">{product.description}</p>
+</div>
+<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-[#F0EAE1] mt-2">
+  <span className="font-bold text-[#A67C52] text-sm">${product.price}</span>
+  <button onClick={() => handleAddClick(product)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center whitespace-nowrap">
+    {(product.spec1Options?.length > 0 || product.spec2Options?.length > 0) ? '選擇規格' : '加入購物車'}
+  </button>
+</div>
+               </div>
               </div>
             ))}
           </div>
 
-{activeProduct && (
+          {/* 雙規格選擇彈窗 */}
+          {activeProduct && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate-fade-in relative">
-                <button onClick={() => setActiveProduct(null)} className="absolute top-3 right-3 text-gray-400">✕</button>
-                <div className="flex gap-3 mb-4">
-                  <img src={activeProduct.images[0]} className="w-16 h-16 rounded-xl object-cover" />
-                  <div>
-                    <h3 className="font-bold text-sm text-[#4A403A]">{activeProduct.name}</h3>
-                    <span className="text-[#A67C52] font-bold text-sm">${activeProduct.price}</span>
+              <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate-fade-in relative max-h-[90vh] flex flex-col">
+                <button onClick={() => setActiveProduct(null)} className="absolute top-3 right-3 text-gray-400 bg-white rounded-full p-1 shadow-sm">✕</button>
+                
+                <div className="overflow-y-auto flex-1 pr-1 scrollbar-none">
+                  <div className="h-48 sm:h-64 flex overflow-x-auto snap-x snap-mandatory scrollbar-none mb-4 rounded-xl">
+                    {activeProduct.images?.map((img, idx) => (
+                      <img key={idx} src={img} className="w-full h-full object-cover shrink-0 snap-center" />
+                    ))}
                   </div>
-                </div>
-                <div className="space-y-4 mb-6">
-                  {activeProduct.spec1Options && activeProduct.spec1Options.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-[#7A6B63] mb-2">{activeProduct.spec1Name || '規格一'}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {activeProduct.spec1Options.map(opt => (
-                          <button key={opt} onClick={() => setTempSpec1(opt)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${tempSpec1 === opt ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#7A6B63] border-[#E8DED1]'}`}>{opt}</button>
-                        ))}
+                  
+                  <div className="mb-4">
+                    <h3 className="font-bold text-lg text-[#4A403A] mb-1">{activeProduct.name}</h3>
+                    <span className="text-[#A67C52] font-bold text-lg">${activeProduct.price}</span>
+                    {activeProduct.viewOnly && activeProduct.description && (
+                      <div className="mt-3 p-3 bg-[#FAF6F0] rounded-xl text-xs text-[#7A6B63] leading-relaxed whitespace-pre-wrap">
+                        {activeProduct.description}
                       </div>
+                    )}
+                  </div>
+                  
+                  {!activeProduct.viewOnly && (
+                    <div className="space-y-4 mb-4">
+                      {activeProduct.spec1Options && activeProduct.spec1Options.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-[#7A6B63] mb-2">{activeProduct.spec1Name || '規格一'}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {activeProduct.spec1Options.map(opt => (
+                              <button key={opt} onClick={() => setTempSpec1(opt)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${tempSpec1 === opt ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#7A6B63] border-[#E8DED1]'}`}>{opt}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {activeProduct.spec2Options && activeProduct.spec2Options.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-[#7A6B63] mb-2">{activeProduct.spec2Name || '規格二'}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {activeProduct.spec2Options.map(opt => (
+                              <button key={opt} onClick={() => setTempSpec2(opt)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${tempSpec2 === opt ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#7A6B63] border-[#E8DED1]'}`}>{opt}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-                  {activeProduct.spec2Options && activeProduct.spec2Options.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-[#7A6B63] mb-2">{activeProduct.spec2Name || '規格二'}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {activeProduct.spec2Options.map(opt => (
-                          <button key={opt} onClick={() => setTempSpec2(opt)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${tempSpec2 === opt ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#7A6B63] border-[#E8DED1]'}`}>{opt}</button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
-                <button onClick={() => addToCart(activeProduct, tempSpec1, tempSpec2)} className="w-full bg-[#D3C2AD] hover:bg-[#C2AF99] text-white py-3 rounded-xl font-bold transition">確認加入購物車</button>
+
+                {!activeProduct.viewOnly ? (
+                  <button onClick={() => addToCart(activeProduct, tempSpec1, tempSpec2)} className="w-full bg-[#D3C2AD] hover:bg-[#C2AF99] text-white py-3 rounded-xl font-bold transition mt-4 shrink-0">確認加入購物車</button>
+                ) : (
+                  <button onClick={() => { setActiveProduct({...activeProduct, viewOnly: false}); setTempSpec1(activeProduct.spec1Options?.[0] || ''); setTempSpec2(activeProduct.spec2Options?.[0] || ''); }} className="w-full bg-[#4A403A] hover:bg-[#322A26] text-white py-3 rounded-xl font-bold transition mt-4 shrink-0">前往選購</button>
+                )}
               </div>
             </div>
-          )}
-        </main>
+          )}     
+   </main>
       )}
 
-      {/* ================= 購物車與結帳抽屜 ================= */}
+     {/* ================= 購物車與結帳抽屜 ================= */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-xs transition-opacity" onClick={() => setCartOpen(false)} />
@@ -819,16 +833,16 @@ const handleAddClick = (product) => {
               {!checkoutStep ? (
                 cartItemDetails.length === 0 ? <div className="text-center py-20 text-[#8C7A70] text-sm">購物車目前是空的</div> : (
                   cartItemDetails.map((item) => (
-                    <div key={item.id} className="flex gap-3 p-3 rounded-xl border border-[#F0EAE1] bg-[#FAF6F0]/40">
+                    <div key={item.cartKey} className="flex gap-3 p-3 rounded-xl border border-[#F0EAE1] bg-[#FAF6F0]/40">
                       <img src={item.images?.[0]} className="w-16 h-16 object-cover rounded-lg" />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-xs font-bold truncate">
-  {item.name}
-{(item.selectedSpec1 || item.selectedSpec2) && (
-    <div className="text-[10px] text-[#8C7A70] mt-0.5">規格：{item.selectedSpec1} {item.selectedSpec2}</div>
-  )}
-  {Number(item.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
-</h4>
+                          {item.name}
+                          {Number(item.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+                        </h4>
+                        {(item.selectedSpec1 || item.selectedSpec2) && (
+                          <div className="text-[10px] text-[#8C7A70] mt-0.5">規格：{item.selectedSpec1} {item.selectedSpec2}</div>
+                        )}
                         <div className="text-xs text-[#A67C52] font-semibold mt-1">${item.price}</div>
                         <div className="flex items-center gap-2 mt-2">
                           <button onClick={() => updateQty(item.cartKey, -1)} className="p-1 rounded bg-white border"><Minus size={12} /></button>
@@ -841,14 +855,9 @@ const handleAddClick = (product) => {
                 )
               ) : (
                 <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4 text-sm">
-{/* --- 👇 新增：結帳下單與商品須知 --- */}
                   <div className="bg-[#FAF6F0] rounded-xl border border-[#E8DED1] p-4 mb-5 text-[#7A6B63] text-[11px] sm:text-xs leading-relaxed shadow-sm">
                     <h4 className="font-bold text-[#A67C52] text-[13px] mb-2 text-center border-b border-[#E8DED1] pb-2">🤍 LUMO 客寶下單與商品須知 🤍</h4>
-                    
-                    {/* 設定固定高度並允許上下滑動，避免佔用整個手機螢幕 */}
                     <div className="space-y-3 h-40 overflow-y-auto pr-2">
-                     
-                      
                       <div>
                         <p className="font-bold text-[#4A403A]">📦 出貨時間</p>
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
@@ -856,7 +865,6 @@ const handleAddClick = (product) => {
                           <li>預購商品：7-21日內出貨 (不含假日與例假日)</li>
                         </ul>
                       </div>
-
                       <div>
                         <p className="font-bold text-[#4A403A]">✨ 商品須知</p>
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
@@ -865,7 +873,6 @@ const handleAddClick = (product) => {
                           <li>銀針耳環材質較軟，如於運送過程中略有變形，可手動輕輕調整，不影響配戴使用。</li>
                         </ul>
                       </div>
-
                       <div>
                         <p className="font-bold text-[#4A403A]">🔄 退換貨須知</p>
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
@@ -874,7 +881,6 @@ const handleAddClick = (product) => {
                           <li>耳環屬貼身物品，基於衛生考量恕不提供退換服務。</li>
                         </ul>
                       </div>
-
                       <div>
                         <p className="font-bold text-[#4A403A]">💍 飾品保養</p>
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
@@ -884,15 +890,11 @@ const handleAddClick = (product) => {
                           <li>鍍色飾品會隨使用習慣產生耗損與褪色，屬正常情況。</li>
                         </ul>
                       </div>
-                      
                       <p className="pt-2 border-t border-[#E8DED1] text-center mt-3 font-medium text-[#A67C52]">如有任何疑問，歡迎私訊詢問，我們會儘快回覆您。</p>
                     </div>
                   </div>
-                  {/* --- 👆 結束 --- */}
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">姓名 *</label><input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">手機號碼 *</label><input type="tel" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
-                  
-                  {/* 付款方式選項 */}
                   <div>
                     <label className="block text-xs font-bold text-[#7A6B63] mb-1">付款方式 *</label>
                     <select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full border px-3 py-2 rounded-lg">
@@ -900,8 +902,6 @@ const handleAddClick = (product) => {
                       <option value="Bank">銀行轉帳</option>
                     </select>
                   </div>
-
-                  {/* 選擇銀行轉帳時，顯示匯款帳號 */}
                   {formData.paymentMethod === 'Bank' && (
                     <div className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-[#7A6B63] text-xs">
                       <p className="font-bold text-[#A67C52] mb-2">💰 請匯款至以下帳戶：</p>
@@ -916,7 +916,6 @@ const handleAddClick = (product) => {
                       <p className="mt-2 text-[#8C7A70] text-[11px]">⚠️ 匯款完成後，請主動聯繫官方 Line 或 IG 客服確認對帳唷！</p>
                     </div>
                   )}
-
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">取貨方式 *</label><div className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-500">7-11 超商取貨 (運費 $60，滿 $599 免運)</div></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">門市名稱與店號 (六碼) *</label><input type="text" required placeholder="例：鑫華門市 (981245)" value={formData.storeInfo} onChange={e => setFormData({...formData, storeInfo: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">備註</label><textarea value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className="w-full border px-3 py-2 rounded-lg h-16"></textarea></div>
