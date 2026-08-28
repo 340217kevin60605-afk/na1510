@@ -34,9 +34,8 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
  const [formData, setFormData] = useState(() => {
     const saved = localStorage.getItem('lumo_last_form');
     if (saved) return JSON.parse(saved);
-    return { name: '', phone: '', shippingMethod: '7-11', storeInfo: '', paymentMethod: 'COD', note: '' };
-  });
-
+   return { name: '', phone: '', ig: '', shippingMethod: '7-11', storeInfo: '', paymentMethod: 'COD', note: '' };
+});
   // 每次 formData 更新時，默默記在 localStorage
   useEffect(() => { localStorage.setItem('lumo_last_form', JSON.stringify(formData)); }, [formData]);
   const [usePoints, setUsePoints] = useState(false);
@@ -59,6 +58,47 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
     { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', images: ['https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80'], tag: '預購', description: '進口厚磅卡紙。', stock: 0 }
   ]);
 
+
+
+// ========== 👇 雲端同步大腦 👇 ==========
+  // 🚨 把下面這行單引號裡面的網址，換成您剛剛複製的那串超長 URL！
+  const SCRIPT_URL = 'https://script.google.com/macros/s/您的超長網址/exec';
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // 1. 剛打開網頁時：去雲端下載最新資料
+  useEffect(() => {
+    fetch(SCRIPT_URL)
+      .then(res => res.json())
+      .then(data => {
+        if(data.orders && data.orders.length > 0) setOrders(data.orders);
+        if(data.members && Object.keys(data.members).length > 0) setMembers(data.members);
+        if(data.products && data.products.length > 0) setProducts(data.products);
+        setIsLoaded(true);
+      })
+      .catch(err => {
+        console.error('讀取雲端資料失敗，使用本地暫存', err);
+        setIsLoaded(true);
+      });
+  }, []);
+
+  // 2. 訂單有更新：傳送給雲端
+  useEffect(() => {
+    if (!isLoaded) return; 
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncOrders', orders }) }).catch(()=>console.log("上傳失敗"));
+  }, [orders, isLoaded]);
+
+  // 3. 會員有更新：傳送給雲端
+  useEffect(() => {
+    if (!isLoaded) return;
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncMembers', members }) }).catch(()=>console.log("上傳失敗"));
+  }, [members, isLoaded]);
+
+  // 4. 商品有更新：傳送給雲端
+  useEffect(() => {
+    if (!isLoaded) return;
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncProducts', products }) }).catch(()=>console.log("上傳失敗"));
+  }, [products, isLoaded]);
+  // ========== 👆 雲端同步大腦 👆 ==========
   useEffect(() => { localStorage.setItem('lumo_members', JSON.stringify(members)); }, [members]);
   useEffect(() => { localStorage.setItem('lumo_cart', JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem('lumo_orders', JSON.stringify(orders)); }, [orders]);
@@ -165,7 +205,7 @@ const handleAddClick = (product) => {
   // ================= 功能：後台管理 =================
   const handleAdminLogin = (e) => {
     e.preventDefault();
-    if (adminPwdInput === '1510') setAdminAuthenticated(true);
+    if (adminPwdInput === 'Lumo1510') setAdminAuthenticated(true);
     else { alert('密碼錯誤！'); setAdminPwdInput(''); }
   };
 
@@ -499,8 +539,11 @@ const handleAddClick = (product) => {
         </div>
         
         {/* 點數活動跑馬燈公告 */}
-        <div className="bg-[#A67C52] text-white text-[11px] sm:text-xs text-center py-1.5 tracking-wide font-medium">
-          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $1 ｜ 🚚 全館滿 $599 免運費！
+        <div className="bg-[#A67C52] text-white text-[11px] sm:text-xs text-center py-1.5 tracking-wide font-medium leading-relaxed">
+          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $1 
+          <br className="sm:hidden" /> {/* 手機版斷行，電腦版隱藏 */}
+          <span className="hidden sm:inline"> ｜ </span> {/* 電腦版分隔線 */}
+          🚚 全館滿 $599 免運費！
         </div>
       </header>
 
@@ -683,44 +726,69 @@ const handleAddClick = (product) => {
         /* ================= 前台購物與展示 ================= */
         <main className="max-w-4xl mx-auto px-4 py-8">
 
-                   <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
+          <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
             <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
             <div className="flex gap-2 mb-4">
               <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
               <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
             </div>
             
-          {searchedOrders?.map(ord => (
-  <div key={ord.id} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-xs mb-3 shadow-sm relative overflow-hidden">
-    <div className="absolute top-0 left-0 w-1 h-full bg-[#A67C52]"></div>
-    <div className="flex justify-between font-bold mb-2 pb-2 border-b border-[#E8DED1]">
-      <span className="text-[#4A403A]">單號: {ord.id}</span>
-      <span className={`px-2 py-0.5 rounded ${ord.status === '已出貨' ? 'bg-gray-200 text-gray-600' : 'bg-[#EBF3E8] text-[#486940]'}`}>{ord.status}</span>
-    </div>
-    
-    <div className="space-y-1.5 mb-3">
-      {ord.items?.map((item, i) => (
-        <div key={i} className="flex justify-between text-[#7A6B63]">
-          <span className="truncate pr-2">
-            {item.name} {item.selectedSpec1 || item.selectedSpec2 ? `(${item.selectedSpec1} ${item.selectedSpec2})` : ''} x{item.quantity}
-          </span>
-          <span>${item.price * item.quantity}</span>
-        </div>
-      ))}
-    </div>
+            {/* 查詢到號碼時顯示點數餘額 */}
+            {searchPhone && members[searchPhone.trim()] !== undefined && searchedOrders.length > 0 && (
+              <div className="bg-[#FAF6F0] p-3 rounded-xl border border-[#D3C2AD] mb-4 text-[#A67C52] font-bold text-sm shadow-sm flex items-center justify-between">
+                <span>💰 您的專屬可用點數</span>
+                <span className="text-lg">{members[searchPhone.trim()]} 點</span>
+              </div>
+            )}
 
-    <div className="bg-white p-2 rounded border border-[#E8DED1] text-[#8C7A70] mb-2">
-      📍 取件門市：<span className="font-bold text-[#4A403A]">{ord.storeName || '未填寫'}</span>
-    </div>
+            {searchedOrders?.map(ord => (
+              <div key={ord.id} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-xs mb-3 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-[#A67C52]"></div>
+                <div className="flex justify-between font-bold mb-2 pb-2 border-b border-[#E8DED1]">
+                  <span className="text-[#4A403A]">單號: {ord.id}</span>
+                  <span className={`px-2 py-0.5 rounded ${ord.status === '已出貨' ? 'bg-gray-200 text-gray-600' : 'bg-[#EBF3E8] text-[#486940]'}`}>{ord.status}</span>
+                </div>
+                
+                <div className="space-y-1.5 mb-3">
+                  {ord.items?.map((item, i) => (
+                    <div key={i} className="flex justify-between text-[#7A6B63]">
+                      <span className="truncate pr-2">
+                        {item.name} {item.selectedSpec1 || item.selectedSpec2 ? `(${item.selectedSpec1} ${item.selectedSpec2})` : ''} x{item.quantity}
+                      </span>
+                      <span>${item.price * item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
 
-    <div className="flex justify-between items-end pt-2 border-t border-[#E8DED1]">
-      <span className="text-[10px] text-gray-400">{ord.paymentStatus}</span>
-   <span className="font-bold text-sm text-[#A67C52]">總額: ${ord.total}</span>
-        </div>
-      </div>
-    ))}
+                <div className="bg-white p-2 rounded border border-[#E8DED1] text-[#8C7A70] mb-2 space-y-1">
+                  <div>📍 取件門市：<span className="font-bold text-[#4A403A]">{ord.storeName || '未填寫'}</span></div>
+                  <div className="text-[10px] text-gray-500 pt-1 border-t border-gray-100 mt-1">
+                    小計: ${ord.subtotal} | 運費: ${ord.shippingFee} {ord.discount > 0 ? `| 點數折抵: -$${ord.discount}` : ''}
                   </div>
-                  
+                </div>
+
+                <div className="flex justify-between items-end pt-2 border-t border-[#E8DED1]">
+                  <span className="text-[10px] text-gray-400">{ord.paymentStatus}</span>
+                  <span className="font-bold text-sm text-[#A67C52]">總額: ${ord.total}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        
+                  {/* 👇 補回前台的分類選單 */}
+          <div className="flex gap-3 mb-6 overflow-x-auto scrollbar-none pb-2">
+            {['全部', ...categories].map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition ${selectedCategory === cat ? 'bg-[#A67C52] text-white' : 'bg-white text-[#7A6B63] border border-[#E8DED1]'}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          {/* 👆 補回結束 */}
           {/* ⚡️ 一行兩格商品列 (Mobile: grid-cols-2, PC: grid-cols-3) */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
             {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
@@ -896,6 +964,15 @@ const handleAddClick = (product) => {
                   </div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">姓名 *</label><input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
                   <div><label className="block text-xs font-bold text-[#7A6B63] mb-1">手機號碼 *</label><input type="tel" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full border px-3 py-2 rounded-lg" /></div>
+
+
+{/* 👇 新增 IG 帳號欄位 */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#7A6B63] mb-1">IG 帳號 (必填：若缺貨/斷貨會傳訊息告知🙇🏻‍♀️) *</label>
+                    <input type="text" required value={formData.ig || ''} onChange={e => setFormData({...formData, ig: e.target.value})} className="w-full border px-3 py-2 rounded-lg" placeholder="請填寫您的 IG 帳號" />
+                  </div>
+
+
                   <div>
                     <label className="block text-xs font-bold text-[#7A6B63] mb-1">付款方式 *</label>
                     <select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full border px-3 py-2 rounded-lg">
