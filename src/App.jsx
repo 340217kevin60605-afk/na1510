@@ -932,14 +932,15 @@ const handleAddClick = (product) => {
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
                           <li>現貨商品：1-3日內出貨</li>
                           <li>預購商品：7-21日內出貨 (不含假日與例假日)</li>
+   <li>預購商品如廠商斷貨會盡早告知</li>
+
                         </ul>
                       </div>
                       <div>
                         <p className="font-bold text-[#4A403A]">✨ 商品須知</p>
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
-                          <li>商品皆為實拍，因光線與螢幕顯色略有色差屬正常現象。</li>
-                          <li>部分商品可能有微小瑕疵或凹痕，完美主義者請斟酌下單。</li>
-                          <li>銀針耳環材質較軟，如於運送過程中略有變形，可手動輕輕調整，不影響配戴使用。</li>
+                          <li>·商品因光線與螢幕顯色略有色差屬正常現象。</li>
+     
                         </ul>
                       </div>
                       <div>
