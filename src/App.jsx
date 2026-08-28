@@ -62,7 +62,7 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
 
 // ========== 👇 雲端同步大腦 👇 ==========
   // 🚨 把下面這行單引號裡面的網址，換成您剛剛複製的那串超長 URL！
-  const SCRIPT_URL = 'https://script.google.com/macros/s/您的超長網址/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQOwkbcp4yymbx6laLjpAltzbJt_UFDhEFfI9fIOE6c_sGSpQ1K5Fe0eiS6uK7-BO7/exec';
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 1. 剛打開網頁時：去雲端下載最新資料
@@ -115,7 +115,7 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
 
   const subtotal = cartItemDetails.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const currentPoints = members[formData.phone.trim()] || members[currentUserPhone.trim()] || 0;
-  const maxDiscountAmount = Math.floor(currentPoints / 100);
+ const maxDiscountAmount = Math.floor(currentPoints / 100) * 5;
   const discountAmount = usePoints ? Math.min(maxDiscountAmount, subtotal) : 0;
   
   // 運費全面改為 60
@@ -182,19 +182,22 @@ const handleAddClick = (product) => {
     };
 
     setOrders([newOrder, ...orders]);
-    setMembers(prev => ({
+    // 👇 修改這段：更新點數扣除邏輯 
+   setMembers(prev => ({
       ...prev,
-      [phoneToUse]: (prev[phoneToUse] || 0) - (discountAmount * 100) + Math.max(0, finalTotal - shippingFee) 
+      [phoneToUse]: (prev[phoneToUse] || 0) - ((discountAmount / 5) * 100) + Math.max(0, finalTotal - shippingFee) 
     }));
     
-    // 👇 結帳後自動扣除庫存
+    // 👇 結帳後自動扣除庫存 (維持不動)
     setProducts(prev => prev.map(p => {
       const cartItem = cartItemDetails.find(c => c.id === p.id);
       return cartItem ? { ...p, stock: Math.max(0, p.stock - cartItem.qty) } : p;
     }));
 
     setCart({}); setCheckoutStep(false); setCartOpen(false); setUsePoints(false);
-    alert(`🎉 訂單已送出！\n本次消費獲得 ${Math.max(0, finalTotal - shippingFee)} 點。`);
+    
+    // 👇 修改這段：跳出視窗新增訂單編號
+    alert(`🎉 訂單已送出！\n您的訂單編號為：${newOrder.id}\n本次消費獲得 ${Math.max(0, finalTotal - shippingFee)} 點。`);
   };
   const handleCopyBank = () => {
     navigator.clipboard.writeText('88611238224675');
@@ -540,7 +543,7 @@ const handleAddClick = (product) => {
         
         {/* 點數活動跑馬燈公告 */}
         <div className="bg-[#A67C52] text-white text-[11px] sm:text-xs text-center py-1.5 tracking-wide font-medium leading-relaxed">
-          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $1 
+          📣 點數活動：消費 $1 累計 1 點，100 點可折抵 $5 
           <br className="sm:hidden" /> {/* 手機版斷行，電腦版隱藏 */}
           <span className="hidden sm:inline"> ｜ </span> {/* 電腦版分隔線 */}
           🚚 全館滿 $599 免運費！
@@ -729,7 +732,19 @@ const handleAddClick = (product) => {
           <div className="bg-white rounded-2xl p-5 mb-8 border border-[#E8DED1] shadow-sm">
             <h2 className="font-bold text-[#A67C52] mb-3 flex items-center gap-2"><Search size={18}/> 查詢客寶專屬點數與訂單</h2>
             <div className="flex gap-2 mb-4">
-              <input type="tel" placeholder="輸入下單手機號碼" value={searchPhone} onChange={e => setSearchPhone(e.target.value)} className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" />
+              <input 
+                type="tel" 
+                placeholder="輸入下單手機號碼" 
+                value={searchPhone} 
+                onChange={e => {
+                  setSearchPhone(e.target.value);
+                  // 如果把文字刪光 (變成空白)，就清空查詢結果
+                  if (e.target.value.trim() === '') {
+                    setSearchedOrders([]);
+                  }
+                }} 
+                className="flex-1 border border-[#E8DED1] px-4 py-2 rounded-xl focus:border-[#D3C2AD] focus:outline-none" 
+              />
               <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
             </div>
             
