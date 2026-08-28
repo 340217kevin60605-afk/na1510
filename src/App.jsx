@@ -87,11 +87,11 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncOrders', orders }) }).catch(()=>console.log("上傳失敗"));
   }, [orders, isLoaded]);
 
-  // 3. 會員有更新：傳送給雲端
+ // 3. 會員有更新：傳送給雲端 (加入 orders 幫助抓取姓名)
   useEffect(() => {
     if (!isLoaded) return;
-    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncMembers', members }) }).catch(()=>console.log("上傳失敗"));
-  }, [members, isLoaded]);
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncMembers', members, orders }) }).catch(()=>console.log("上傳失敗"));
+  }, [members, orders, isLoaded]);
 
   // 4. 商品有更新：傳送給雲端
   useEffect(() => {
@@ -167,6 +167,7 @@ const handleAddClick = (product) => {
   };
   const handlePlaceOrder = (e) => {
     e.preventDefault();
+
     const phoneToUse = formData.phone.trim();
     const newOrder = {
       id: `ORD-${Date.now().toString().slice(-6)}`,
@@ -1036,8 +1037,8 @@ const handleAddClick = (product) => {
                 {usePoints && discountAmount > 0 && <div className="flex justify-between text-xs text-[#A67C52]"><span>點數折抵</span><span>-${discountAmount}</span></div>}
                 <div className="flex justify-between font-bold pt-2 border-t text-sm"><span>總結帳金額</span><span className="text-[#A67C52]">${finalTotal}</span></div>
                 {!checkoutStep ? (
-                  <button onClick={() => setCheckoutStep(true)} className="w-full bg-[#D3C2AD] text-white py-3 rounded-xl font-bold mt-2">前往結帳</button>
-                ) : (
+  <button type="button" onClick={(e) => { e.preventDefault(); setCheckoutStep(true); }} className="w-full bg-[#D3C2AD] text-white py-3 rounded-xl font-bold mt-2">前往結帳</button>
+) : (
                   <button type="submit" form="checkout-form" className="w-full bg-[#A67C52] text-white py-3 rounded-xl font-bold mt-2">確認送出訂單</button>
                 )}
               </div>
