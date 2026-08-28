@@ -232,16 +232,40 @@ const handleAddClick = (product) => {
       return { ...prev, [cartKey]: next };
     });
   };
-  const handlePlaceOrder = (e) => {
+ const handlePlaceOrder = async (e) => {
     e.preventDefault();
+    const isConfirmed = window.confirm(`請確認結帳資訊與點數折抵是否填寫正確？\n\n本次結帳總金額為：$${finalTotal}\n\n按下「確定」即會送出訂單！`);
+    if (!isConfirmed) return; 
 
     const phoneToUse = formData.phone.trim();
+    const newOrderId = Date.now().toString().slice(-6);
+    const fullOrderId = `ORD-${newOrderId}`;
+
+    const itemsString = cartItemDetails.map(item => 
+      `${item.name} ${item.selectedSpec1 ? `(${item.selectedSpec1})` : ''} x${item.qty}`
+    ).join('\n');
+
+    // 🌟 1. 精準計算「現貨扣除量 (deductedStock)」，並預先算好新庫存
+    let nextProducts = [...products];
+    const orderItemsToSave = cartItemDetails.map(item => {
+      const pIndex = nextProducts.findIndex(p => p.id === item.id);
+      let deducted = 0;
+      if (pIndex !== -1) {
+        const currentStock = Number(nextProducts[pIndex].stock) || 0;
+        // 實際能扣除的現貨數量 (如果庫存是0，deducted就會是0)
+        deducted = Math.min(currentStock, item.qty); 
+        nextProducts[pIndex] = { ...nextProducts[pIndex], stock: currentStock - Math.max(0, deducted) };
+      }
+      // 將 deductedStock 存入訂單明細中，未來取消訂單才知道要還多少
+      return { ...item, quantity: item.qty, image: item.images?.[0], deductedStock: deducted };
+    });
+
     const newOrder = {
-      id: `ORD-${Date.now().toString().slice(-6)}`,
-      orderId: Date.now().toString().slice(-6),
+      id: fullOrderId,
+      orderId: newOrderId,
       createdAt: { seconds: Math.floor(Date.now() / 1000) },
       ...formData,
-      items: cartItemDetails.map(item => ({...item, quantity: item.qty, image: item.images[0]})), 
+      items: orderItemsToSave, // 🌟 使用新整理好(帶有 deductedStock) 的商品明細
       logistics: '711',
       storeName: formData.storeInfo, 
       shippingFee: shippingFee,
@@ -250,21 +274,18 @@ const handleAddClick = (product) => {
     };
 
     setOrders([newOrder, ...orders]);
-    // 👇 修改這段：更新點數扣除邏輯 
-   setMembers(prev => ({
+    
+    // 🌟 2. 更新會員點數
+    setMembers(prev => ({
       ...prev,
       [phoneToUse]: (prev[phoneToUse] || 0) - ((discountAmount / 5) * 100) + Math.max(0, finalTotal - shippingFee) 
     }));
     
-    // 👇 結帳後自動扣除庫存 (維持不動)
-    setProducts(prev => prev.map(p => {
-      const cartItem = cartItemDetails.find(c => c.id === p.id);
-      return cartItem ? { ...p, stock: Math.max(0, p.stock - cartItem.qty) } : p;
-    }));
+    // 🌟 3. 直接套用算好的新庫存 (取代原本的 setProducts 寫法)
+    setProducts(nextProducts);
 
     setCart({}); setCheckoutStep(false); setCartOpen(false); setUsePoints(false);
     
-    // 👇 修改這段：跳出視窗新增訂單編號
     alert(`🎉 訂單已送出！\n您的訂單編號為：${newOrder.id}\n本次消費獲得 ${Math.max(0, finalTotal - shippingFee)} 點。`);
   };
   const handleCopyBank = () => {
@@ -288,6 +309,39 @@ const handleAddClick = (product) => {
       }
       return o;
     }));
+  };
+
+// 👇 新增：刪除與取消訂單邏輯
+  const handleDeleteOrder = (orderId) => {
+    if (!window.confirm('確定要取消並刪除這筆訂單嗎？\n(若當時下單有扣除現貨庫存，系統將自動補回)')) return;
+
+    const orderToDelete = orders.find(o => o.id === orderId);
+    if (!orderToDelete) return;
+
+    // 1. 補回庫存
+    setProducts(prevProducts => prevProducts.map(p => {
+      // 尋找該商品在這筆訂單中的紀錄
+      const itemInOrder = orderToDelete.items?.find(i => i.id === p.id);
+      // 如果當初有扣到現貨 (deductedStock > 0)，就加回去
+      if (itemInOrder && itemInOrder.deductedStock > 0) {
+        return { ...p, stock: Number(p.stock) + Number(itemInOrder.deductedStock) };
+      }
+      return p; // 如果是預購 (deductedStock = 0)，庫存不變
+    }));
+
+    // 2. 補回與扣除會員點數
+    const phone = (orderToDelete.phone || '').trim();
+    if (phone && members[phone] !== undefined) {
+      const spentPoints = ((Number(orderToDelete.discount) || 0) / 5) * 100;
+      const earnedPoints = Math.max(0, Number(orderToDelete.total) - Number(orderToDelete.shippingFee || 0));
+      setMembers(prev => ({
+        ...prev,
+        [phone]: Math.max(0, (prev[phone] || 0) + spentPoints - earnedPoints)
+      }));
+    }
+
+    // 3. 刪除該訂單
+    setOrders(prev => prev.filter(o => o.id !== orderId));
   };
 
  const saveProduct = (e) => {
@@ -670,6 +724,16 @@ const handleAddClick = (product) => {
   className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${ord.status === '已出貨' ? 'bg-[#E5E7EB] text-[#4B5563] hover:bg-[#d1d5db]' : 'bg-[#EBF3E8] text-[#486940] hover:bg-[#dcfce7]'}`}>
   {ord.status}
 </button>
+{/* 👇 加上這顆新的刪除按鈕 👇 */}
+                              <button 
+                                onClick={() => handleDeleteOrder(ord.id)}
+                                className="px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition bg-gray-100 text-gray-500 hover:bg-red-500 hover:text-white"
+                              >
+                                刪除
+                              </button>
+                              {/* 👆 加上這顆新的刪除按鈕 👆 */}
+
+
                             </div>
                           </div>
                           <p>顧客：{ord.name} ({ord.phone})</p>
@@ -1022,7 +1086,13 @@ const handleAddClick = (product) => {
                       <div>
                         <p className="font-bold text-[#4A403A]">✨ 商品須知</p>
                         <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
-                          <li>·商品因光線與螢幕顯色略有色差屬正常現象。</li>
+                          <li>商品因光線與螢幕顯色略有色差屬正常現象</li>
+ <li>部分商品可能有微小瑕疵或凹痕，完美主義者請斟酌下單</li>
+
+      <li>銀針耳環材質較軟，如於運送過程中略有變形，可手動輕輕調整，不影響配戴使用</li>
+     
+
+
      
                         </ul>
                       </div>
