@@ -749,13 +749,13 @@ const handleAddClick = (product) => {
               <button onClick={handleCustomerSearch} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-5 py-2 rounded-xl font-bold transition">查詢</button>
             </div>
             
-            {/* 查詢到號碼時顯示點數餘額 */}
-            {searchPhone && members[searchPhone.trim()] !== undefined && searchedOrders.length > 0 && (
+            {/* 查詢到號碼時顯示點數餘額 (修復 insertBefore 錯誤) */}
+            {searchPhone.trim() !== '' && members[searchPhone.trim()] !== undefined && searchedOrders.length > 0 ? (
               <div className="bg-[#FAF6F0] p-3 rounded-xl border border-[#D3C2AD] mb-4 text-[#A67C52] font-bold text-sm shadow-sm flex items-center justify-between">
                 <span>💰 您的專屬可用點數</span>
                 <span className="text-lg">{members[searchPhone.trim()]} 點</span>
               </div>
-            )}
+            ) : null}
 
             {searchedOrders?.map(ord => (
               <div key={ord.id} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-xs mb-3 shadow-sm relative overflow-hidden">
@@ -779,7 +779,7 @@ const handleAddClick = (product) => {
                 <div className="bg-white p-2 rounded border border-[#E8DED1] text-[#8C7A70] mb-2 space-y-1">
                   <div>📍 取件門市：<span className="font-bold text-[#4A403A]">{ord.storeName || '未填寫'}</span></div>
                   <div className="text-[10px] text-gray-500 pt-1 border-t border-gray-100 mt-1">
-                    小計: ${ord.subtotal} | 運費: ${ord.shippingFee} {ord.discount > 0 ? `| 點數折抵: -$${ord.discount}` : ''}
+                    小計: ${ord.subtotal} | 運費: ${ord.shippingFee} {ord.discount > 0 ? `| 點數折抵: -$${ord.discount}` : null}
                   </div>
                 </div>
 
