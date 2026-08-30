@@ -147,20 +147,19 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
 
 
 // ========== 👇 雲端同步大腦 👇 ==========
-  // 🚨 把下面這行單引號裡面的網址，換成您剛剛複製的那串超長 URL！
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQOwkbcp4yymbx6laLjpAltzbJt_UFDhEFfI9fIOE6c_sGSpQ1K5Fe0eiS6uK7-BO7/exec';
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 1. 剛打開網頁時：去雲端下載最新資料
   useEffect(() => {
-    fetch(SCRIPT_URL)
+    // 🌟 神奇魔法：加入 '?t=' + 時間戳記，打破瀏覽器暫存，強迫抓取最新資料！
+    fetch(SCRIPT_URL + '?t=' + new Date().getTime(), { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if(data.orders && data.orders.length > 0) setOrders(data.orders);
         if(data.members && Object.keys(data.members).length > 0) setMembers(data.members);
         if(data.products && data.products.length > 0) setProducts(data.products);
-        // 👇 新增這行：從雲端把分類抓下來
-        if(data.categories && data.categories.length > 0) setCategories(data.categories); 
+        if(data.categories && data.categories.length > 0) setCategories(data.categories); // 確保有抓取分類
         setIsLoaded(true);
       })
       .catch(err => {
@@ -175,7 +174,7 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncOrders', orders }) }).catch(()=>console.log("上傳失敗"));
   }, [orders, isLoaded]);
 
- // 3. 會員有更新：傳送給雲端 (加入 orders 幫助抓取姓名)
+  // 3. 會員有更新：傳送給雲端 (加入 orders 幫助抓取姓名)
   useEffect(() => {
     if (!isLoaded) return;
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncMembers', members, orders }) }).catch(()=>console.log("上傳失敗"));
@@ -187,7 +186,7 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncProducts', products }) }).catch(()=>console.log("上傳失敗"));
   }, [products, isLoaded]);
 
-  // 👇 新增：5. 分類有更新：傳送給雲端
+  // 5. 分類有更新：傳送給雲端
   useEffect(() => {
     if (!isLoaded) return;
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncCategories', categories }) }).catch(()=>console.log("上傳失敗"));
