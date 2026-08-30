@@ -95,7 +95,13 @@ export default function LumoStore() {
  const [searchPhone, setSearchPhone] = useState('');
   // 建議修改 State 宣告：
 const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 [] 而非 null
-  const [categories, setCategories] = useState(['服飾飾品', '生活選物', '客製設計']);
+  // 👇 1. 將分類改為具備記憶功能
+ const [categories, setCategories] = useState(() => {
+    const saved = localStorage.getItem('lumo_categories');
+    return saved ? JSON.parse(saved) : ['服飾飾品', '生活選物', '客製設計'];
+  });
+  useEffect(() => { localStorage.setItem('lumo_categories', JSON.stringify(categories)); }, [categories]);
+
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [newCategoryName, setNewCategoryName] = useState('');
  const [formData, setFormData] = useState(() => {
@@ -107,6 +113,19 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   useEffect(() => { localStorage.setItem('lumo_last_form', JSON.stringify(formData)); }, [formData]);
   const [usePoints, setUsePoints] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+// 👇 2. 新增多規格庫存的輔助函數 (請加在產品宣告的上方)
+  const getVariantCombos = (s1Str, s2Str) => {
+    const s1 = s1Str ? s1Str.split(',').map(s=>s.trim()).filter(Boolean) : [''];
+    const s2 = s2Str ? s2Str.split(',').map(s=>s.trim()).filter(Boolean) : [''];
+    const combos = [];
+    s1.forEach(o1 => {
+      s2.forEach(o2 => {
+        if(o1 || o2) combos.push({ key: `${o1}|${o2}`, label: `${o1} ${o2}`.trim() });
+      });
+    });
+    return combos;
+  };
  const [productForm, setProductForm] = useState({ 
     name: '', price: '', category: '服飾飾品', imageInput: '', tag: '', description: '', stock: 0,
     spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' 
@@ -245,18 +264,28 @@ const handleAddClick = (product) => {
       `${item.name} ${item.selectedSpec1 ? `(${item.selectedSpec1})` : ''} x${item.qty}`
     ).join('\n');
 
-    // 🌟 1. 精準計算「現貨扣除量 (deductedStock)」，並預先算好新庫存
-    let nextProducts = [...products];
+    // 🌟 1. 精準計算「現貨扣除量 (deductedStock)」，並支援獨立規格庫存
+    let nextProducts = JSON.parse(JSON.stringify(products)); // 深拷貝
     const orderItemsToSave = cartItemDetails.map(item => {
       const pIndex = nextProducts.findIndex(p => p.id === item.id);
       let deducted = 0;
       if (pIndex !== -1) {
-        const currentStock = Number(nextProducts[pIndex].stock) || 0;
-        // 實際能扣除的現貨數量 (如果庫存是0，deducted就會是0)
+        const isVariant = item.selectedSpec1 || item.selectedSpec2;
+        const vKey = `${item.selectedSpec1 || ''}|${item.selectedSpec2 || ''}`;
+        
+        let currentStock = isVariant && nextProducts[pIndex].variantStock 
+            ? (Number(nextProducts[pIndex].variantStock[vKey]) || 0) 
+            : (Number(nextProducts[pIndex].stock) || 0);
+
         deducted = Math.min(currentStock, item.qty); 
-        nextProducts[pIndex] = { ...nextProducts[pIndex], stock: currentStock - Math.max(0, deducted) };
+        
+        // 扣除對應規格的庫存
+        if (isVariant && nextProducts[pIndex].variantStock) {
+            nextProducts[pIndex].variantStock[vKey] = currentStock - deducted;
+        }
+        // 總庫存也跟著扣
+        nextProducts[pIndex].stock = Math.max(0, nextProducts[pIndex].stock - deducted);
       }
-      // 將 deductedStock 存入訂單明細中，未來取消訂單才知道要還多少
       return { ...item, quantity: item.qty, image: item.images?.[0], deductedStock: deducted };
     });
 
@@ -318,16 +347,24 @@ const handleAddClick = (product) => {
     const orderToDelete = orders.find(o => o.id === orderId);
     if (!orderToDelete) return;
 
-    // 1. 補回庫存
-    setProducts(prevProducts => prevProducts.map(p => {
-      // 尋找該商品在這筆訂單中的紀錄
-      const itemInOrder = orderToDelete.items?.find(i => i.id === p.id);
-      // 如果當初有扣到現貨 (deductedStock > 0)，就加回去
-      if (itemInOrder && itemInOrder.deductedStock > 0) {
-        return { ...p, stock: Number(p.stock) + Number(itemInOrder.deductedStock) };
-      }
-      return p; // 如果是預購 (deductedStock = 0)，庫存不變
-    }));
+    // 1. 補回庫存 (包含獨立規格)
+    setProducts(prevProducts => {
+      let nextProds = JSON.parse(JSON.stringify(prevProducts));
+      nextProds = nextProds.map(p => {
+        const itemInOrder = orderToDelete.items?.find(i => i.id === p.id);
+        if (itemInOrder && itemInOrder.deductedStock > 0) {
+           const isVariant = itemInOrder.selectedSpec1 || itemInOrder.selectedSpec2;
+           const vKey = `${itemInOrder.selectedSpec1 || ''}|${itemInOrder.selectedSpec2 || ''}`;
+           
+           p.stock = Number(p.stock) + Number(itemInOrder.deductedStock);
+           if (isVariant && p.variantStock && p.variantStock[vKey] !== undefined) {
+               p.variantStock[vKey] = Number(p.variantStock[vKey]) + Number(itemInOrder.deductedStock);
+           }
+        }
+        return p;
+      });
+      return nextProds;
+    });
 
     // 2. 補回與扣除會員點數
     const phone = (orderToDelete.phone || '').trim();
@@ -350,12 +387,29 @@ const handleAddClick = (product) => {
     const s1Opts = productForm.spec1Options ? productForm.spec1Options.split(',').map(s => s.trim()) : [];
     const s2Opts = productForm.spec2Options ? productForm.spec2Options.split(',').map(s => s.trim()) : [];
 
+    // 👇 自動計算多規格庫存總和
+    const combos = getVariantCombos(productForm.spec1Options, productForm.spec2Options);
+    let totalStock = Number(productForm.stock) || 0;
+    let cleanVariantStock = { ...productForm.variantStock };
+
+    if (combos.length > 0) {
+        totalStock = 0;
+        const validKeys = combos.map(c => c.key);
+        const filteredVariantStock = {};
+        validKeys.forEach(k => {
+            filteredVariantStock[k] = Number(cleanVariantStock[k]) || 0;
+            totalStock += filteredVariantStock[k];
+        });
+        cleanVariantStock = filteredVariantStock;
+    }
+
     const newProduct = { 
       ...productForm, 
       images: imageArray, 
-      stock: Number(productForm.stock),
+      stock: totalStock, // 總庫存自動更新
       spec1Options: s1Opts,
-      spec2Options: s2Opts
+      spec2Options: s2Opts,
+      variantStock: cleanVariantStock // 儲存各規格的庫存
     };
     delete newProduct.imageInput;
 
@@ -365,9 +419,8 @@ const handleAddClick = (product) => {
       setProducts([{ ...newProduct, id: `p${Date.now()}` }, ...products]);
     }
     setEditingProduct(null);
-    setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' });
+    setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '', variantStock: {} });
   };
-
   // 👇 會員管理功能
   const handleEditMemberPhone = (oldPhone) => {
     const newPhone = prompt('請輸入新的電話號碼：', oldPhone);
@@ -406,6 +459,21 @@ const handleAddClick = (product) => {
       [newCats[index + 1], newCats[index]] = [newCats[index], newCats[index + 1]];
     }
     setCategories(newCats);
+  };
+
+// 👇 3. 新增商品上下移動邏輯
+  const handleMoveProduct = (id, direction) => {
+    setProducts(prev => {
+        const idx = prev.findIndex(p => p.id === id);
+        if (idx < 0) return prev;
+        const newProds = [...prev];
+        if (direction === 'up' && idx > 0) {
+            [newProds[idx - 1], newProds[idx]] = [newProds[idx], newProds[idx - 1]];
+        } else if (direction === 'down' && idx < newProds.length - 1) {
+            [newProds[idx + 1], newProds[idx]] = [newProds[idx], newProds[idx + 1]];
+        }
+        return newProds;
+    });
   };
 
   const handleSelectOrder = (id) => {
@@ -746,7 +814,7 @@ const handleAddClick = (product) => {
                 </div>
               )}
 
-              {adminTab === 'products' && (
+           {adminTab === 'products' && (
                 <div className="grid md:grid-cols-2 gap-6">
                  <form onSubmit={saveProduct} className="bg-white p-5 rounded-2xl border border-[#E8DED1] space-y-4 shadow-sm h-fit">
                     <h3 className="font-bold text-[#A67C52] border-b pb-2">{editingProduct ? '編輯商品' : '新增商品'}</h3>
@@ -778,6 +846,29 @@ const handleAddClick = (product) => {
                       </div>
                     </div>
                     
+                    {/* 👇 新增：動態多規格庫存設定 */}
+                    {getVariantCombos(productForm.spec1Options, productForm.spec2Options).length > 0 && (
+                      <div className="p-3 bg-[#FAF6F0] rounded-xl border border-[#D3C2AD] space-y-2 mt-2">
+                        <p className="text-xs font-bold text-[#A67C52]">📦 各規格庫存設定 (將自動加總為總庫存)</p>
+                        {getVariantCombos(productForm.spec1Options, productForm.spec2Options).map(combo => (
+                          <div key={combo.key} className="flex justify-between items-center bg-white px-3 py-1.5 rounded border text-xs">
+                            <span className="font-bold">{combo.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500">庫存:</span>
+                              <input type="number" 
+                                value={productForm.variantStock?.[combo.key] ?? ''} 
+                                onChange={e => setProductForm(prev => ({
+                                    ...prev, 
+                                    variantStock: { ...prev.variantStock, [combo.key]: e.target.value }
+                                }))}
+                                className="border px-2 py-1 rounded w-20 text-center" placeholder="0" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* 👆 結束：動態多規格庫存設定 */}
+
                     <div>
                       <label className="block text-xs font-bold text-[#7A6B63] mb-1">圖片網址 (多張請用逗號或換行隔開)</label>
                       <textarea required placeholder="https://image1.jpg,&#10;https://image2.jpg" value={productForm.imageInput} onChange={e => setProductForm({...productForm, imageInput: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm h-24"></textarea>
@@ -785,12 +876,13 @@ const handleAddClick = (product) => {
 
                     <div className="flex gap-2">
                       <button type="submit" className="flex-1 bg-[#D3C2AD] text-white py-2 rounded-lg font-bold text-sm">儲存</button>
-                      {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setProductForm({ name: '', price: '', category: categories[0], imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' });}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm">取消</button>}
+                      {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setProductForm({ name: '', price: '', category: categories[0], imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '', variantStock: {} });}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm">取消</button>}
                     </div>
                   </form>
+                  
                   <div className="space-y-3">
-                    {/* --- 👇 步驟6 替換：加入 filter 過濾邏輯 --- */}
-           {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((p) => (
+                    {/* --- 加入 filter 過濾邏輯 --- */}
+                    {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((p) => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
                         <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" />
                         <div className="flex-1">
@@ -798,8 +890,20 @@ const handleAddClick = (product) => {
                           <div className="text-[#8C7A70] text-[11px]">共 {p.images.length} 張圖</div>
                           <span className="text-[#A67C52] text-xs font-bold">${p.price}</span>
                         </div>
-                      <button onClick={() => {setEditingProduct(p); setProductForm({...p, imageInput: p.images.join('\n'), spec1Options: p.spec1Options?.join(',') || '', spec2Options: p.spec2Options?.join(',') || '' });}} className="text-[#A67C52] p-1.5"><Edit2 size={14} /></button>
-<button onClick={() => { if(window.confirm('確定要刪除此商品嗎？')) setProducts(prev => prev.filter(prod => prod.id !== p.id)); }} className="text-red-400 p-1.5"><Trash2 size={14} /></button>
+                        
+                        {/* 👇 加上 ↑ ↓ 移動按鈕 */}
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleMoveProduct(p.id, 'up')} className="text-gray-400 hover:text-black p-1 font-bold text-lg leading-none">↑</button>
+                          <button onClick={() => handleMoveProduct(p.id, 'down')} className="text-gray-400 hover:text-black p-1 font-bold text-lg leading-none">↓</button>
+                          
+                          <button onClick={() => {
+                            setEditingProduct(p); 
+                            setProductForm({...p, imageInput: p.images.join('\n'), spec1Options: p.spec1Options?.join(',') || '', spec2Options: p.spec2Options?.join(',') || '', variantStock: p.variantStock || {} });
+                          }} className="text-[#A67C52] p-1.5"><Edit2 size={14} /></button>
+                          
+                          <button onClick={() => { if(window.confirm('確定要刪除此商品嗎？')) setProducts(prev => prev.filter(prod => prod.id !== p.id)); }} className="text-red-400 p-1.5"><Trash2 size={14} /></button>
+                        </div>
+                        
                       </div>
                     ))}
                   </div>
