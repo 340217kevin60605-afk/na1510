@@ -159,6 +159,8 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
         if(data.orders && data.orders.length > 0) setOrders(data.orders);
         if(data.members && Object.keys(data.members).length > 0) setMembers(data.members);
         if(data.products && data.products.length > 0) setProducts(data.products);
+        // 👇 新增這行：從雲端把分類抓下來
+        if(data.categories && data.categories.length > 0) setCategories(data.categories); 
         setIsLoaded(true);
       })
       .catch(err => {
@@ -184,6 +186,12 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
     if (!isLoaded) return;
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncProducts', products }) }).catch(()=>console.log("上傳失敗"));
   }, [products, isLoaded]);
+
+  // 👇 新增：5. 分類有更新：傳送給雲端
+  useEffect(() => {
+    if (!isLoaded) return;
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncCategories', categories }) }).catch(()=>console.log("上傳失敗"));
+  }, [categories, isLoaded]);
   // ========== 👆 雲端同步大腦 👆 ==========
   useEffect(() => { localStorage.setItem('lumo_members', JSON.stringify(members)); }, [members]);
   useEffect(() => { localStorage.setItem('lumo_cart', JSON.stringify(cart)); }, [cart]);
@@ -264,11 +272,13 @@ const handleAddClick = (product) => {
       `${item.name} ${item.selectedSpec1 ? `(${item.selectedSpec1})` : ''} x${item.qty}`
     ).join('\n');
 
-    // 🌟 1. 精準計算「現貨扣除量 (deductedStock)」，並支援獨立規格庫存
+    // 🌟 1. 精準計算「現貨扣除量 (deductedStock)」，並支援獨立規格庫存與混合預購標記
     let nextProducts = JSON.parse(JSON.stringify(products)); // 深拷貝
     const orderItemsToSave = cartItemDetails.map(item => {
       const pIndex = nextProducts.findIndex(p => p.id === item.id);
       let deducted = 0;
+      let stockNote = ''; // 紀錄這筆明細是全現貨、全預購，還是混和
+
       if (pIndex !== -1) {
         const isVariant = item.selectedSpec1 || item.selectedSpec2;
         const vKey = `${item.selectedSpec1 || ''}|${item.selectedSpec2 || ''}`;
@@ -277,7 +287,18 @@ const handleAddClick = (product) => {
             ? (Number(nextProducts[pIndex].variantStock[vKey]) || 0) 
             : (Number(nextProducts[pIndex].stock) || 0);
 
+        // 計算實際能扣除的現貨，以及不足轉為預購的數量
         deducted = Math.min(currentStock, item.qty); 
+        const preOrderQty = item.qty - deducted;
+
+        // 產生給老闆和客人看的標籤
+        if (deducted > 0 && preOrderQty > 0) {
+            stockNote = `現貨x${deducted}, 預購x${preOrderQty}`;
+        } else if (deducted === 0) {
+            stockNote = `全預購`;
+        } else {
+            stockNote = `全現貨`;
+        }
         
         // 扣除對應規格的庫存
         if (isVariant && nextProducts[pIndex].variantStock) {
@@ -285,8 +306,10 @@ const handleAddClick = (product) => {
         }
         // 總庫存也跟著扣
         nextProducts[pIndex].stock = Math.max(0, nextProducts[pIndex].stock - deducted);
+      } else {
+        stockNote = `全預購`; // 萬一商品被刪除，視為全預購
       }
-      return { ...item, quantity: item.qty, image: item.images?.[0], deductedStock: deducted };
+      return { ...item, quantity: item.qty, image: item.images?.[0], deductedStock: deducted, stockNote };
     });
 
     const newOrder = {
@@ -625,7 +648,7 @@ const handleAddClick = (product) => {
                             <td style="vertical-align:top; padding:4px 2px 4px 0; border-bottom: 1px dashed #ddd; word-wrap: break-word;">
                                 <div style="line-height:1.4; font-weight:bold;">
                                     ${idx + 1}. ${item.name}
-                                    ${Number(item.stock) <= 0 ? `<span style="color:#d32f2f;font-size:9px;border:1px solid #d32f2f;padding:1px 3px;margin-left:4px;border-radius:2px;">預購</span>` : ''}
+                                   ${item.stockNote ? `<span style="color:#d32f2f;font-size:9px;border:1px solid #d32f2f;padding:1px 3px;margin-left:4px;border-radius:2px;">${item.stockNote}</span>` : ''}
                                 </div>
                                 ${specHtml}
                                 ${customTextHtml}
@@ -1003,8 +1026,9 @@ const handleAddClick = (product) => {
                 <div className="space-y-1.5 mb-3">
                   {ord.items?.map((item, i) => (
                     <div key={i} className="flex justify-between text-[#7A6B63]">
-                      <span className="truncate pr-2">
+                     <span className="truncate pr-2">
                         {item.name} {item.selectedSpec1 || item.selectedSpec2 ? `(${item.selectedSpec1} ${item.selectedSpec2})` : ''} x{item.quantity}
+                        {item.stockNote && <span className="ml-1 text-[10px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm">{item.stockNote}</span>}
                       </span>
                       <span>${item.price * item.quantity}</span>
                     </div>
