@@ -136,7 +136,19 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
 
   // --- 👇 加入 LocalStorage 記憶體功能 ---
-  const [members, setMembers] = useState(() => JSON.parse(localStorage.getItem('lumo_members')) || { '0912345678': 250 });
+ // 👇 升級：支援向下相容舊資料的全新會員結構
+  const [members, setMembers] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('lumo_members')) || {};
+    const formatted = {};
+    Object.keys(saved).forEach(k => {
+      if (typeof saved[k] === 'number') formatted[k] = { name: '', points: saved[k] };
+      else formatted[k] = saved[k];
+    });
+    return formatted;
+  });
+
+  const [editMemberForm, setEditMemberForm] = useState(null); // 會員編輯器
+  const [editOrder, setEditOrder] = useState(null); // 訂單編輯器
   const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('lumo_cart')) || {});
   const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('lumo_orders')) || []);
   const [products, setProducts] = useState(() => JSON.parse(localStorage.getItem('lumo_products')) || [
@@ -224,7 +236,8 @@ const cartItemDetails = Object.entries(cart).map(([cartKey, qty]) => {
 }).filter(Boolean);
 
   const subtotal = cartItemDetails.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const currentPoints = members[formData.phone.trim()] || members[currentUserPhone.trim()] || 0;
+  const currentPhone = formData.phone.trim() || currentUserPhone.trim();
+  const currentPoints = members[currentPhone]?.points || 0;
  const maxDiscountAmount = Math.floor(currentPoints / 100) * 5;
   const discountAmount = usePoints ? Math.min(maxDiscountAmount, subtotal) : 0;
   
@@ -412,12 +425,105 @@ const handleAddClick = (product) => {
       const earnedPoints = Math.max(0, Number(orderToDelete.total) - Number(orderToDelete.shippingFee || 0));
       setMembers(prev => ({
         ...prev,
-        [phone]: Math.max(0, (prev[phone] || 0) + spentPoints - earnedPoints)
+        [phone]: { ...prev[phone], points: Math.max(0, (prev[phone]?.points || 0) + spentPoints - earnedPoints) }
       }));
     }
 
     // 3. 刪除該訂單
     setOrders(prev => prev.filter(o => o.id !== orderId));
+  };
+
+  // ================= 核心：訂單編輯與連動引擎 =================
+  const handleSaveEditedOrder = (e) => {
+    e.preventDefault();
+    const originalOrder = orders.find(o => o.id === editOrder.id);
+    if(!originalOrder) return;
+
+    // 1. 退回舊訂單的庫存與點數
+    let nextProducts = JSON.parse(JSON.stringify(products));
+    originalOrder.items?.forEach(item => {
+        if (item.deductedStock > 0) {
+            const p = nextProducts.find(prod => prod.id === item.id);
+            if (p) {
+                const isVariant = item.selectedSpec1 || item.selectedSpec2;
+                const vKey = `${item.selectedSpec1 || ''}|${item.selectedSpec2 || ''}`;
+                p.stock = Number(p.stock) + Number(item.deductedStock);
+                if (isVariant && p.variantStock && p.variantStock[vKey] !== undefined) {
+                    p.variantStock[vKey] = Number(p.variantStock[vKey]) + Number(item.deductedStock);
+                }
+            }
+        }
+    });
+
+    let nextMembers = JSON.parse(JSON.stringify(members));
+    const oldPhone = (originalOrder.phone || '').trim();
+    if (oldPhone && nextMembers[oldPhone]) {
+        const spent = (Number(originalOrder.discount || 0) / 5) * 100;
+        const earned = Math.max(0, Number(originalOrder.total) - Number(originalOrder.shippingFee || 0));
+        nextMembers[oldPhone].points = Math.max(0, (nextMembers[oldPhone].points || 0) + spent - earned);
+    }
+
+    // 2. 套用新訂單的庫存
+    const newItems = editOrder.items.map(item => {
+        const p = nextProducts.find(prod => prod.id === item.id);
+        let deducted = 0;
+        let stockNote = '全預購';
+        if (p) {
+            const isVariant = item.selectedSpec1 || item.selectedSpec2;
+            const vKey = `${item.selectedSpec1 || ''}|${item.selectedSpec2 || ''}`;
+            let currentStock = isVariant && p.variantStock ? (Number(p.variantStock[vKey]) || 0) : (Number(p.stock) || 0);
+
+            deducted = Math.min(currentStock, item.quantity);
+            const pre = item.quantity - deducted;
+            if (deducted > 0 && pre > 0) stockNote = `現貨x${deducted}, 預購x${pre}`;
+            else if (deducted === 0) stockNote = `全預購`;
+            else stockNote = `全現貨`;
+
+            p.stock = Math.max(0, p.stock - deducted);
+            if (isVariant && p.variantStock && p.variantStock[vKey] !== undefined) {
+                p.variantStock[vKey] = currentStock - deducted;
+            }
+        }
+        return { ...item, deductedStock: deducted, stockNote };
+    });
+
+    // 3. 套用新訂單的點數與最終結算
+    const finalEditedOrder = { ...editOrder, items: newItems };
+    const newPhone = (finalEditedOrder.phone || '').trim();
+    if (newPhone) {
+        if (!nextMembers[newPhone]) nextMembers[newPhone] = { name: finalEditedOrder.name, points: 0 };
+        const newSpent = (Number(finalEditedOrder.discount || 0) / 5) * 100;
+        const newEarned = Math.max(0, Number(finalEditedOrder.total) - Number(finalEditedOrder.shippingFee || 0));
+        nextMembers[newPhone].points = Math.max(0, (nextMembers[newPhone].points || 0) - newSpent + newEarned);
+        nextMembers[newPhone].name = finalEditedOrder.name;
+    }
+
+    setProducts(nextProducts);
+    setMembers(nextMembers);
+    setOrders(prev => prev.map(o => o.id === finalEditedOrder.id ? finalEditedOrder : o));
+    setEditOrder(null);
+    alert('✅ 訂單修改成功，庫存與點數已自動完成結算與同步！');
+  };
+
+  // ================= 核心：手動會員管理 =================
+  const handleSaveMember = (e) => {
+    e.preventDefault();
+    if(!editMemberForm.phone) return;
+    setMembers(prev => {
+        const next = {...prev};
+        if (!editMemberForm.isNew && editMemberForm.phone !== editMemberForm.oldPhone) {
+            delete next[editMemberForm.oldPhone];
+        }
+        next[editMemberForm.phone] = { name: editMemberForm.name, points: Number(editMemberForm.points) };
+        return next;
+    });
+    setEditMemberForm(null);
+  };
+
+  const handleDeleteMember = (phone) => {
+    if(window.confirm(`確定刪除會員 ${phone} 嗎？`)) {
+        setMembers(prev => { const updated = { ...prev }; delete updated[phone]; return updated; });
+    }
   };
 
  const saveProduct = (e) => {
@@ -460,22 +566,7 @@ const handleAddClick = (product) => {
     setEditingProduct(null);
     setProductForm({ name: '', price: '', category: categories[0] || '', imageInput: '', tag: '', description: '', stock: 0, spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '', variantStock: {} });
   };
-  // 👇 會員管理功能
-  const handleEditMemberPhone = (oldPhone) => {
-    const newPhone = prompt('請輸入新的電話號碼：', oldPhone);
-    if (newPhone && newPhone !== oldPhone) {
-      setMembers(prev => { const updated = { ...prev }; updated[newPhone] = updated[oldPhone]; delete updated[oldPhone]; return updated; });
-    }
-  };
-  const handleEditMemberPoints = (phone) => {
-    const newPoints = prompt('請輸入新的點數：', members[phone]);
-    if (newPoints !== null && !isNaN(newPoints)) setMembers(prev => ({ ...prev, [phone]: Number(newPoints) }));
-  };
-  const handleDeleteMember = (phone) => {
-    if(window.confirm(`確定刪除會員 ${phone} 嗎？`)) {
-      setMembers(prev => { const updated = { ...prev }; delete updated[phone]; return updated; });
-    }
-  };
+
 
   // 分類功能管理 (含新增、刪除、上下排序)
   const handleAddCategory = () => {
@@ -839,7 +930,13 @@ const handleAddClick = (product) => {
                                 刪除
                               </button>
                               {/* 👆 加上這顆新的刪除按鈕 👆 */}
-
+{/* 👇 加在刪除按鈕旁邊 👇 */}
+<button 
+  onClick={() => setEditOrder(JSON.parse(JSON.stringify(ord)))} 
+  className="px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition bg-blue-100 text-blue-600 hover:bg-blue-500 hover:text-white"
+>
+  編輯
+</button>
 
                             </div>
                           </div>
@@ -850,8 +947,75 @@ const handleAddClick = (product) => {
                       </div>
                     ))
                   }
+
+{editOrder && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+    <div className="bg-white rounded-2xl p-5 w-full max-w-lg shadow-xl relative max-h-[90vh] overflow-y-auto">
+      <h3 className="font-bold text-[#A67C52] text-lg mb-4">📝 編輯訂單 ({editOrder.id})</h3>
+      <form onSubmit={handleSaveEditedOrder} className="space-y-4 text-sm">
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editOrder.name} onChange={e=>setEditOrder({...editOrder, name: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" required /></div>
+          <div><label className="block text-xs font-bold text-gray-500 mb-1">電話</label><input type="text" value={editOrder.phone} onChange={e=>setEditOrder({...editOrder, phone: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" required /></div>
+          <div><label className="block text-xs font-bold text-gray-500 mb-1">取件門市</label><input type="text" value={editOrder.storeName} onChange={e=>setEditOrder({...editOrder, storeName: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" /></div>
+          <div><label className="block text-xs font-bold text-gray-500 mb-1">訂單狀態</label>
+            <select value={editOrder.status} onChange={e=>setEditOrder({...editOrder, status: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50">
+              <option value="待處理">待處理</option><option value="已出貨">已出貨</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-3">
+          <label className="block text-xs font-bold text-[#A67C52] mb-2">📦 商品明細 (調整數量或刪除)</label>
+          <div className="space-y-2">
+            {editOrder.items.map((item, idx) => (
+              <div key={idx} className="flex gap-2 items-center bg-[#FAF6F0] p-2 rounded-lg">
+                <span className="flex-1 truncate font-bold text-xs">{item.name} <span className="text-gray-500 font-normal">{item.selectedSpec1} {item.selectedSpec2}</span></span>
+                <span className="text-xs text-gray-500">單價$</span>
+                <input type="number" value={item.price} onChange={e=>{
+                    const newItems=[...editOrder.items]; newItems[idx].price=Number(e.target.value);
+                    setEditOrder({...editOrder, items: newItems, subtotal: newItems.reduce((sum, i)=>sum+(i.price*i.quantity),0)});
+                }} className="w-14 border border-[#D3C2AD] px-1 py-1 text-center rounded-md bg-white text-xs" />
+                <span className="text-xs text-gray-500">數量</span>
+                <input type="number" value={item.quantity} onChange={e=>{
+                    const newItems=[...editOrder.items]; newItems[idx].quantity=Number(e.target.value);
+                    setEditOrder({...editOrder, items: newItems, subtotal: newItems.reduce((sum, i)=>sum+(i.price*i.quantity),0)});
+                }} className="w-12 border border-[#D3C2AD] px-1 py-1 text-center rounded-md bg-white text-xs font-bold" />
+                <button type="button" onClick={()=>{
+                    const newItems=editOrder.items.filter((_, i) => i !== idx);
+                    setEditOrder({...editOrder, items: newItems, subtotal: newItems.reduce((sum, i)=>sum+(i.price*i.quantity),0)});
+                }} className="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 border-t border-gray-100 pt-3 bg-gray-50 p-3 rounded-lg mt-2">
+          <div><label className="block text-xs font-bold text-gray-500 mb-1">運費</label><input type="number" value={editOrder.shippingFee} onChange={e=>setEditOrder({...editOrder, shippingFee: Number(e.target.value)})} className="w-full border px-2 py-1 rounded" /></div>
+          <div><label className="block text-xs font-bold text-gray-500 mb-1">點數折抵金額</label><input type="number" value={editOrder.discount} onChange={e=>setEditOrder({...editOrder, discount: Number(e.target.value)})} className="w-full border px-2 py-1 rounded" /></div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 mb-1">總金額 (自動結算)</label>
+            <input type="number" value={Math.max(0, Number(editOrder.subtotal) + Number(editOrder.shippingFee) - Number(editOrder.discount))} readOnly className="w-full border border-[#D3C2AD] px-2 py-1 rounded bg-white font-bold text-[#A67C52]" />
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button type="submit" onClick={() => setEditOrder({...editOrder, total: Math.max(0, Number(editOrder.subtotal) + Number(editOrder.shippingFee) - Number(editOrder.discount))})} className="flex-1 bg-[#A67C52] text-white py-2.5 rounded-xl font-bold hover:bg-[#8C6B46] transition">儲存變更</button>
+          <button type="button" onClick={() => setEditOrder(null)} className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
                 </div>
               )}
+
+
+
+
+
+
+
 
            {adminTab === 'products' && (
                 <div className="grid md:grid-cols-2 gap-6">
@@ -950,25 +1114,40 @@ const handleAddClick = (product) => {
               )}
 
 {adminTab === 'members' && (
-                <div className="bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm max-w-2xl">
-                  <h3 className="font-bold text-[#A67C52] border-b pb-2 mb-4">會員管理</h3>
-                  <div className="space-y-2">
-                    {Object.entries(members).map(([phone, points]) => {
-                      const memberName = orders.find(o => o.phone === phone)?.name || '未填寫';
-                      return (
-                        <div key={phone} className="flex flex-wrap justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1] gap-2">
-                          <div className="font-bold text-sm">👤 {memberName} 📞 {phone} <span className="ml-4 text-[#A67C52]">💰 {points} 點</span></div>
-                          <div className="flex gap-2">
-                            <button onClick={() => handleEditMemberPhone(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改電話</button>
-                            <button onClick={() => handleEditMemberPoints(phone)} className="bg-white border px-2 py-1 rounded text-xs font-bold shadow-sm">改點數</button>
-                            <button onClick={() => handleDeleteMember(phone)} className="text-red-400 p-1"><Trash2 size={16}/></button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+  <div className="bg-white p-5 rounded-2xl border border-[#E8DED1] shadow-sm max-w-2xl">
+    <div className="flex justify-between items-center border-b pb-2 mb-4">
+        <h3 className="font-bold text-[#A67C52]">會員管理</h3>
+        <button onClick={() => setEditMemberForm({ phone: '', name: '', points: 0, isNew: true, oldPhone: '' })} className="bg-[#D3C2AD] hover:bg-[#C2AF99] text-white px-3 py-1.5 rounded-lg text-sm font-bold transition">＋ 新增會員</button>
+    </div>
+
+    {editMemberForm && (
+        <form onSubmit={handleSaveMember} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#A67C52] mb-4 space-y-3 animate-fade-in shadow-inner">
+            <h4 className="font-bold text-[#4A403A] text-sm">{editMemberForm.isNew ? '新增會員' : '編輯會員'}</h4>
+            <div className="grid grid-cols-3 gap-3">
+                <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editMemberForm.name} onChange={e=>setEditMemberForm({...editMemberForm, name: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg text-sm" required /></div>
+                <div><label className="block text-xs font-bold text-gray-500 mb-1">電話</label><input type="text" value={editMemberForm.phone} onChange={e=>setEditMemberForm({...editMemberForm, phone: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg text-sm" required /></div>
+                <div><label className="block text-xs font-bold text-gray-500 mb-1">點數</label><input type="number" value={editMemberForm.points} onChange={e=>setEditMemberForm({...editMemberForm, points: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg text-sm" required /></div>
+            </div>
+            <div className="flex gap-2 mt-2">
+                <button type="submit" className="bg-[#A67C52] text-white px-4 py-1.5 rounded-lg text-sm font-bold">儲存</button>
+                <button type="button" onClick={() => setEditMemberForm(null)} className="bg-gray-300 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-bold">取消</button>
+            </div>
+        </form>
+    )}
+
+    <div className="space-y-2">
+      {Object.entries(members).map(([phone, data]) => (
+        <div key={phone} className="flex flex-wrap justify-between items-center bg-[#FAF6F0] p-3 rounded-lg border border-[#E8DED1] gap-2 hover:border-[#D3C2AD] transition">
+          <div className="font-bold text-sm">👤 {data.name || '未填寫'} 📞 {phone} <span className="ml-4 text-[#A67C52]">💰 {data.points} 點</span></div>
+          <div className="flex gap-2">
+            <button onClick={() => setEditMemberForm({ phone, name: data.name, points: data.points, isNew: false, oldPhone: phone })} className="bg-white border px-3 py-1 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-50">編輯</button>
+            <button onClick={() => handleDeleteMember(phone)} className="text-red-400 p-1.5 hover:bg-red-50 rounded-lg"><Trash2 size={16}/></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
 
 
@@ -1028,7 +1207,7 @@ const handleAddClick = (product) => {
 {searchPhone.trim() !== '' && members[searchPhone.trim()] !== undefined ? (
   <div className="bg-[#FAF6F0] p-3 rounded-xl border border-[#D3C2AD] mb-4 text-[#A67C52] font-bold text-sm shadow-sm flex items-center justify-between">
     <span>💰 您的專屬可用點數</span>
-    <span className="text-lg">{members[searchPhone.trim()]} 點</span>
+    <span className="text-lg">{members[searchPhone.trim()].points} 點</span>
   </div>
 ) : null}
 
