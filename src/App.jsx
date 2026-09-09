@@ -150,21 +150,28 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQOwkbcp4yymbx6laLjpAltzbJt_UFDhEFfI9fIOE6c_sGSpQ1K5Fe0eiS6uK7-BO7/exec';
   const [isLoaded, setIsLoaded] = useState(false);
 
- // 1. 剛打開網頁時：去雲端下載最新資料
+// 1. 剛打開網頁時：去雲端下載最新資料
   useEffect(() => {
     fetch(SCRIPT_URL + '?t=' + new Date().getTime(), { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
-        // 修正 A：拿掉 .length > 0 的判斷，就算雲端是被清空的 [] 也要同步下來
         if(data.orders) setOrders(data.orders);
         if(data.members) setMembers(data.members);
         if(data.products) setProducts(data.products);
-        if(data.categories) setCategories(data.categories); 
-        setIsLoaded(true);
+        
+        // 💡 修正 3：加入長度判斷，如果雲端分類被清空了，不要把前台分類也蓋掉
+        if(data.categories && data.categories.length > 0) {
+            setCategories(data.categories);
+        }
+
+        // 💡 修正 4：延遲 1 秒再開啟「上傳開關」，徹底阻斷初始載入時的 4 連發衝突洗白 Bug
+        setTimeout(() => {
+          setIsLoaded(true);
+        }, 1000);
       })
       .catch(err => {
         console.error('讀取雲端資料失敗，使用本地暫存', err);
-        setIsLoaded(true);
+        setTimeout(() => setIsLoaded(true), 1000);
       });
   }, []);
 
