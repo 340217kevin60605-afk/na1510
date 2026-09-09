@@ -1207,7 +1207,8 @@ const handleAddClick = (product) => {
 {searchPhone.trim() !== '' && members[searchPhone.trim()] !== undefined ? (
   <div className="bg-[#FAF6F0] p-3 rounded-xl border border-[#D3C2AD] mb-4 text-[#A67C52] font-bold text-sm shadow-sm flex items-center justify-between">
     <span>💰 您的專屬可用點數</span>
-    <span className="text-lg">{members[searchPhone.trim()].points} 點</span>
+    {/* 👇 加上 ?.points */}
+    <span className="text-lg">{members[searchPhone.trim()]?.points} 點</span>
   </div>
 ) : null}
 
