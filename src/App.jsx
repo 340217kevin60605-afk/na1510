@@ -150,16 +150,16 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQOwkbcp4yymbx6laLjpAltzbJt_UFDhEFfI9fIOE6c_sGSpQ1K5Fe0eiS6uK7-BO7/exec';
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // 1. 剛打開網頁時：去雲端下載最新資料
+ // 1. 剛打開網頁時：去雲端下載最新資料
   useEffect(() => {
-    // 🌟 神奇魔法：加入 '?t=' + 時間戳記，打破瀏覽器暫存，強迫抓取最新資料！
     fetch(SCRIPT_URL + '?t=' + new Date().getTime(), { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
-        if(data.orders && data.orders.length > 0) setOrders(data.orders);
-        if(data.members && Object.keys(data.members).length > 0) setMembers(data.members);
-        if(data.products && data.products.length > 0) setProducts(data.products);
-        if(data.categories && data.categories.length > 0) setCategories(data.categories); // 確保有抓取分類
+        // 修正 A：拿掉 .length > 0 的判斷，就算雲端是被清空的 [] 也要同步下來
+        if(data.orders) setOrders(data.orders);
+        if(data.members) setMembers(data.members);
+        if(data.products) setProducts(data.products);
+        if(data.categories) setCategories(data.categories); 
         setIsLoaded(true);
       })
       .catch(err => {
@@ -168,29 +168,30 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
       });
   }, []);
 
+  // 修正 B：把所有的 , isLoaded 從依賴陣列 [ ] 中拿掉！這樣載入成功當下就不會觸發反向覆蓋
   // 2. 訂單有更新：傳送給雲端
   useEffect(() => {
     if (!isLoaded) return; 
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncOrders', orders }) }).catch(()=>console.log("上傳失敗"));
-  }, [orders, isLoaded]);
+  }, [orders]); 
 
-  // 3. 會員有更新：傳送給雲端 (加入 orders 幫助抓取姓名)
+  // 3. 會員有更新：傳送給雲端 
   useEffect(() => {
     if (!isLoaded) return;
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncMembers', members, orders }) }).catch(()=>console.log("上傳失敗"));
-  }, [members, orders, isLoaded]);
+  }, [members, orders]); 
 
   // 4. 商品有更新：傳送給雲端
   useEffect(() => {
     if (!isLoaded) return;
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncProducts', products }) }).catch(()=>console.log("上傳失敗"));
-  }, [products, isLoaded]);
+  }, [products]); 
 
   // 5. 分類有更新：傳送給雲端
   useEffect(() => {
     if (!isLoaded) return;
     fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'syncCategories', categories }) }).catch(()=>console.log("上傳失敗"));
-  }, [categories, isLoaded]);
+  }, [categories]);
   // ========== 👆 雲端同步大腦 👆 ==========
   useEffect(() => { localStorage.setItem('lumo_members', JSON.stringify(members)); }, [members]);
   useEffect(() => { localStorage.setItem('lumo_cart', JSON.stringify(cart)); }, [cart]);
@@ -199,12 +200,21 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   // --- 👆 結束 ---
 
   // ================= 計算邏輯 =================
- const cartItemDetails = Object.entries(cart).map(([cartKey, qty]) => {
-    const [id, s1, s2] = cartKey.split('|');
-    const product = products.find(p => p.id === id);
-    if (!product) return null;
-    return { ...product, cartKey, selectedSpec1: s1 || '', selectedSpec2: s2 || '', qty };
-  }).filter(Boolean);
+// ✅ 修改後：(加入 currentStock 計算)
+const cartItemDetails = Object.entries(cart).map(([cartKey, qty]) => {
+  const [id, s1, s2] = cartKey.split('|');
+  const product = products.find(p => p.id === id);
+  if (!product) return null;
+  
+  // 計算被選中的「獨立規格」目前剩下多少庫存
+  const vKey = `${s1 || ''}|${s2 || ''}`;
+  const isVariant = s1 || s2;
+  const currentStock = isVariant && product.variantStock 
+      ? (Number(product.variantStock[vKey]) || 0) 
+      : (Number(product.stock) || 0);
+
+  return { ...product, cartKey, selectedSpec1: s1 || '', selectedSpec2: s2 || '', qty, currentStock };
+}).filter(Boolean);
 
   const subtotal = cartItemDetails.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const currentPoints = members[formData.phone.trim()] || members[currentUserPhone.trim()] || 0;
@@ -906,7 +916,7 @@ const handleAddClick = (product) => {
                     {/* --- 加入 filter 過濾邏輯 --- */}
                     {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((p) => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
-                        <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" />
+                        <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" loading="lazy" />
                         <div className="flex-1">
                           <h4 className="font-bold text-sm">{p.name}</h4>
                           <div className="text-[#8C7A70] text-[11px]">共 {p.images.length} 張圖</div>
@@ -1007,12 +1017,13 @@ const handleAddClick = (product) => {
             </div>
             
             {/* 查詢到號碼時顯示點數餘額 (修復 insertBefore 錯誤) */}
-            {searchPhone.trim() !== '' && members[searchPhone.trim()] !== undefined && searchedOrders.length > 0 ? (
-              <div className="bg-[#FAF6F0] p-3 rounded-xl border border-[#D3C2AD] mb-4 text-[#A67C52] font-bold text-sm shadow-sm flex items-center justify-between">
-                <span>💰 您的專屬可用點數</span>
-                <span className="text-lg">{members[searchPhone.trim()]} 點</span>
-              </div>
-            ) : null}
+       
+{searchPhone.trim() !== '' && members[searchPhone.trim()] !== undefined ? (
+  <div className="bg-[#FAF6F0] p-3 rounded-xl border border-[#D3C2AD] mb-4 text-[#A67C52] font-bold text-sm shadow-sm flex items-center justify-between">
+    <span>💰 您的專屬可用點數</span>
+    <span className="text-lg">{members[searchPhone.trim()]} 點</span>
+  </div>
+) : null}
 
             {searchedOrders?.map(ord => (
               <div key={ord.id} className="bg-[#FAF6F0] p-4 rounded-xl border border-[#D3C2AD] text-xs mb-3 shadow-sm relative overflow-hidden">
@@ -1070,7 +1081,7 @@ const handleAddClick = (product) => {
                 {/* 支援左右滑動的多圖展示 */}
                 <div className="h-40 sm:h-56 flex overflow-x-auto snap-x snap-mandatory scrollbar-none relative">
                   {product.images?.map((img, idx) => (
-                    <img key={idx} src={img} className="w-full h-full object-cover shrink-0 snap-center transition duration-500" />
+                    <img key={idx} src={img} className="w-full h-full object-cover shrink-0 snap-center transition duration-500" loading="lazy" />
                   ))}
                   {product.tag && <span className="absolute top-2 left-2 text-[10px] sm:text-xs bg-white/90 px-2 py-1 rounded-full font-bold text-[#7A6B63] shadow-sm">{product.tag}</span>}
                   {product.images?.length > 1 && (
@@ -1177,11 +1188,11 @@ const handleAddClick = (product) => {
                 cartItemDetails.length === 0 ? <div className="text-center py-20 text-[#8C7A70] text-sm">購物車目前是空的</div> : (
                   cartItemDetails.map((item) => (
                     <div key={item.cartKey} className="flex gap-3 p-3 rounded-xl border border-[#F0EAE1] bg-[#FAF6F0]/40">
-                      <img src={item.images?.[0]} className="w-16 h-16 object-cover rounded-lg" />
+                      <img src={item.images?.[0]} className="w-16 h-16 object-cover rounded-lg" loading="lazy" />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-xs font-bold truncate">
                           {item.name}
-                          {Number(item.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+                         {Number(item.currentStock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
                         </h4>
                         {(item.selectedSpec1 || item.selectedSpec2) && (
                           <div className="text-[10px] text-[#8C7A70] mt-0.5">規格：{item.selectedSpec1} {item.selectedSpec2}</div>
