@@ -1058,7 +1058,10 @@ const handleAddClick = (product) => {
                  <form onSubmit={saveProduct} className="bg-white p-5 rounded-2xl border border-[#E8DED1] space-y-4 shadow-sm h-fit">
                     <h3 className="font-bold text-[#A67C52] border-b pb-2">{editingProduct ? '編輯商品' : '新增商品'}</h3>
                     <input type="text" placeholder="商品名稱" required value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
-                    <input type="number" placeholder="價格" required value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm" />
+                   <div className="flex gap-2">
+  <input type="number" placeholder="原價 (必填) *" required value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} className="w-1/2 border px-3 py-2 rounded-lg text-sm" />
+  <input type="number" placeholder="優惠價 (選填，無則留空)" value={productForm.promoPrice || ''} onChange={e => setProductForm({...productForm, promoPrice: e.target.value})} className="w-1/2 border px-3 py-2 rounded-lg text-sm" />
+</div>
                     
                     <select value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})} className="w-full border px-3 py-2 rounded-lg text-sm">
                       {categories.map(c => <option key={c} value={c}>{c}</option>)}
