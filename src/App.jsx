@@ -113,6 +113,15 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   useEffect(() => { localStorage.setItem('lumo_last_form', JSON.stringify(formData)); }, [formData]);
   const [usePoints, setUsePoints] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+// 預設只顯示前 10 個商品
+const [visibleCount, setVisibleCount] = useState(10);
+
+// 當切換分類時，把顯示數量重置回 10
+useEffect(() => {
+  setVisibleCount(10);
+}, [selectedCategory]);
+
+
 
 // 👇 2. 新增多規格庫存的輔助函數 (請加在產品宣告的上方)
   const getVariantCombos = (s1Str, s2Str) => {
@@ -127,7 +136,7 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
     return combos;
   };
  const [productForm, setProductForm] = useState({ 
-    name: '', price: '', category: '服飾飾品', imageInput: '', tag: '', description: '', stock: 0,
+    name: '', price: '', promoPrice: '', category: '服飾飾品', imageInput: '', tag: '', description: '', stock: 0,
     spec1Name: '', spec1Options: '', spec2Name: '', spec2Options: '' 
   });
   const [activeProduct, setActiveProduct] = useState(null);
@@ -151,10 +160,7 @@ const [searchedOrders, setSearchedOrders] = useState([]); // 將初始值設為 
   const [editOrder, setEditOrder] = useState(null); // 訂單編輯器
   const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('lumo_cart')) || {});
   const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('lumo_orders')) || []);
-  const [products, setProducts] = useState(() => JSON.parse(localStorage.getItem('lumo_products')) || [
-    { id: 'p1', name: '經典燕麥色法式襯衫', price: 680, category: '服飾飾品', images: ['https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=500&q=80'], tag: '現貨', description: '親膚材質，百搭首選。', stock: 5 },
-    { id: 'p2', name: '品牌客製風格卡紙', price: 150, category: '客製設計', images: ['https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&q=80'], tag: '預購', description: '進口厚磅卡紙。', stock: 0 }
-  ]);
+ const [products, setProducts] = useState(() => JSON.parse(localStorage.getItem('lumo_products')) || []);
 
 
 
@@ -235,7 +241,10 @@ const cartItemDetails = Object.entries(cart).map(([cartKey, qty]) => {
   return { ...product, cartKey, selectedSpec1: s1 || '', selectedSpec2: s2 || '', qty, currentStock };
 }).filter(Boolean);
 
-  const subtotal = cartItemDetails.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const subtotal = cartItemDetails.reduce((sum, item) => {
+    const finalPrice = item.promoPrice ? item.promoPrice : item.price;
+    return sum + (finalPrice * item.qty);
+  }, 0);
   const currentPhone = formData.phone.trim() || currentUserPhone.trim();
   const currentPoints = members[currentPhone]?.points || 0;
  const maxDiscountAmount = Math.floor(currentPoints / 100) * 5;
@@ -550,6 +559,7 @@ const handleAddClick = (product) => {
 
     const newProduct = { 
       ...productForm, 
+      promoPrice: productForm.promoPrice ? Number(productForm.promoPrice) : null, 
       images: imageArray, 
       stock: totalStock, // 總庫存自動更新
       spec1Options: s1Opts,
@@ -838,6 +848,13 @@ const handleAddClick = (product) => {
   };
 
   return (
+<div>
+    {/* 加入這行：如果雲端資料還沒下載完，先顯示載入中，不要顯示預設的假商品 */}
+    {!isLoaded ? (
+      <div style={{ textAlign: 'center', padding: '50px' }}>商品努力載入中...</div>
+    ) : (
+      <>
+
     <div className="min-h-screen bg-[#FAF6F0] text-[#4A403A] font-sans selection:bg-[#D3C2AD] selection:text-white">
       {/* 導覽列：置中 Logo 設計 (套用指定圖片) */}
       <header className="bg-white/90 backdrop-blur-md border-b border-[#E8DED1] sticky top-0 z-40">
@@ -942,6 +959,7 @@ const handleAddClick = (product) => {
                           </div>
                           <p>顧客：{ord.name} ({ord.phone})</p>
                           <p>門市：{ord.storeName}</p>
+<p>IG 帳號：{ord.ig || '未提供'}</p>
                           <p className="font-bold text-[#A67C52] mt-2">總計：${ord.total}</p>
                         </div>
                       </div>
@@ -957,6 +975,17 @@ const handleAddClick = (product) => {
           <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editOrder.name} onChange={e=>setEditOrder({...editOrder, name: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" required /></div>
           <div><label className="block text-xs font-bold text-gray-500 mb-1">電話</label><input type="text" value={editOrder.phone} onChange={e=>setEditOrder({...editOrder, phone: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" required /></div>
           <div><label className="block text-xs font-bold text-gray-500 mb-1">取件門市</label><input type="text" value={editOrder.storeName} onChange={e=>setEditOrder({...editOrder, storeName: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" /></div>
+<div>
+  <label className="block text-xs font-bold text-gray-500 mb-1">IG 帳號</label>
+  <input 
+    type="text" 
+    value={editOrder.ig || ''} 
+    onChange={e => setEditOrder({...editOrder, ig: e.target.value})} 
+    className="w-full border px-2 py-1.5 rounded-lg bg-gray-50" 
+    placeholder="未提供"
+  />
+</div>
+
           <div><label className="block text-xs font-bold text-gray-500 mb-1">訂單狀態</label>
             <select value={editOrder.status} onChange={e=>setEditOrder({...editOrder, status: e.target.value})} className="w-full border px-2 py-1.5 rounded-lg bg-gray-50">
               <option value="待處理">待處理</option><option value="已出貨">已出貨</option>
@@ -997,7 +1026,14 @@ const handleAddClick = (product) => {
             <input type="number" value={Math.max(0, Number(editOrder.subtotal) + Number(editOrder.shippingFee) - Number(editOrder.discount))} readOnly className="w-full border border-[#D3C2AD] px-2 py-1 rounded bg-white font-bold text-[#A67C52]" />
           </div>
         </div>
-
+<div>
+          <label>IG 帳號：</label>
+          <input 
+            type="text" 
+            value={editOrder.ig || ''} 
+            onChange={(e) => setEditOrder({...editOrder, ig: e.target.value})} 
+          />
+        </div>
         <div className="flex gap-2 pt-2">
           <button type="submit" onClick={() => setEditOrder({...editOrder, total: Math.max(0, Number(editOrder.subtotal) + Number(editOrder.shippingFee) - Number(editOrder.discount))})} className="flex-1 bg-[#A67C52] text-white py-2.5 rounded-xl font-bold hover:bg-[#8C6B46] transition">儲存變更</button>
           <button type="button" onClick={() => setEditOrder(null)} className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
@@ -1087,7 +1123,13 @@ const handleAddClick = (product) => {
                     {/* --- 加入 filter 過濾邏輯 --- */}
                     {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((p) => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
-                        <img src={p.images[0]} className="w-16 h-16 object-cover rounded-lg" loading="lazy" />
+                        {/* 找到商品圖片的 img 標籤，加上 loading="lazy" */}
+<img 
+  src={product.images[0]} 
+  alt={product.name} 
+  loading="lazy" 
+  className="w-full h-full object-cover ..."
+/>
                         <div className="flex-1">
                           <h4 className="font-bold text-sm">{p.name}</h4>
                           <div className="text-[#8C7A70] text-[11px]">共 {p.images.length} 張圖</div>
@@ -1261,14 +1303,21 @@ const handleAddClick = (product) => {
             ))}
           </div>
           {/* 👆 補回結束 */}
-          {/* ⚡️ 一行兩格商品列 (Mobile: grid-cols-2, PC: grid-cols-3) */}
+         {/* ⚡️ 一行兩格商品列 (Mobile: grid-cols-2, PC: grid-cols-3) */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
-            {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((product) => (
+            {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).slice(0, visibleCount).map((product) => (
               <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-[#E8DED1] shadow-sm group flex flex-col">
+                
                 {/* 支援左右滑動的多圖展示 */}
                 <div className="h-40 sm:h-56 flex overflow-x-auto snap-x snap-mandatory scrollbar-none relative">
                   {product.images?.map((img, idx) => (
-                    <img key={idx} src={img} className="w-full h-full object-cover shrink-0 snap-center transition duration-500" loading="lazy" />
+                    <img 
+                      key={idx}
+                      src={img} 
+                      alt={product.name} 
+                      loading="lazy" 
+                      className="w-full h-full object-cover shrink-0 snap-center"
+                    />
                   ))}
                   {product.tag && <span className="absolute top-2 left-2 text-[10px] sm:text-xs bg-white/90 px-2 py-1 rounded-full font-bold text-[#7A6B63] shadow-sm">{product.tag}</span>}
                   {product.images?.length > 1 && (
@@ -1279,23 +1328,44 @@ const handleAddClick = (product) => {
                 </div>
                 
                 <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2">
-                 <div className="cursor-pointer" onClick={() => setActiveProduct({...product, viewOnly: true})}>
-  <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight hover:text-[#A67C52] transition">
-    {product.name}
-    {Number(product.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
-  </h3>
-  <p className="text-[10px] text-[#8C7A70] line-clamp-2 mt-1">{product.description}</p>
-</div>
-<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-[#F0EAE1] mt-2">
-  <span className="font-bold text-[#A67C52] text-sm">${product.price}</span>
-  <button onClick={() => handleAddClick(product)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center whitespace-nowrap">
-    {(product.spec1Options?.length > 0 || product.spec2Options?.length > 0) ? '選擇規格' : '加入購物車'}
-  </button>
-</div>
-               </div>
+                  <div className="cursor-pointer" onClick={() => setActiveProduct({...product, viewOnly: true})}>
+                    <h3 className="font-bold text-[#4A403A] text-xs sm:text-sm line-clamp-2 leading-tight hover:text-[#A67C52] transition">
+                      {product.name}
+                      {Number(product.stock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+                    </h3>
+                    <p className="text-[10px] text-[#8C7A70] line-clamp-2 mt-1">{product.description}</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-[#F0EAE1] mt-2">
+                    <div className="flex items-baseline gap-1.5">
+                      {product.promoPrice ? (
+                        <>
+                          <span className="text-gray-400 line-through text-xs">${product.price}</span>
+                          <span className="text-red-500 font-extrabold text-sm sm:text-base">${product.promoPrice}</span>
+                        </>
+                      ) : (
+                        <span className="font-bold text-[#A67C52] text-sm">${product.price}</span>
+                      )}
+                    </div>
+                    <button onClick={() => handleAddClick(product)} className="w-full sm:w-auto bg-[#D3C2AD] hover:bg-[#C2AF99] text-white text-[11px] sm:text-xs px-3 py-1.5 rounded-lg font-medium transition text-center whitespace-nowrap">
+                      {(product.spec1Options?.length > 0 || product.spec2Options?.length > 0) ? '選擇規格' : '加入購物車'}
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
+
+          {/* 👇 載入更多按鈕 👇 */}
+          {visibleCount < products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).length && (
+            <div className="flex justify-center mt-8 pb-10">
+              <button 
+                onClick={() => setVisibleCount(prev => prev + 10)}
+                className="bg-[#D3C2AD] text-white px-8 py-2.5 rounded-full font-bold hover:bg-[#A67C52] transition shadow-sm"
+              >
+                載入更多商品
+              </button>
+            </div>
+          )}
 
           {/* 雙規格選擇彈窗 */}
           {activeProduct && (
@@ -1305,10 +1375,16 @@ const handleAddClick = (product) => {
                 
                 <div className="overflow-y-auto flex-1 pr-1 scrollbar-none">
                   <div className="h-48 sm:h-64 flex overflow-x-auto snap-x snap-mandatory scrollbar-none mb-4 rounded-xl">
-                    {activeProduct.images?.map((img, idx) => (
-                      <img key={idx} src={img} className="w-full h-full object-cover shrink-0 snap-center" />
-                    ))}
-                  </div>
+  {activeProduct.images?.map((img, idx) => (
+    <img 
+      key={idx}
+      src={img} 
+      alt={activeProduct.name} 
+      loading="lazy" 
+      className="w-full h-full object-cover shrink-0 snap-center"
+    />
+  ))}
+</div>
                   
                   <div className="mb-4">
                     <h3 className="font-bold text-lg text-[#4A403A] mb-1">{activeProduct.name}</h3>
@@ -1375,11 +1451,16 @@ const handleAddClick = (product) => {
                 cartItemDetails.length === 0 ? <div className="text-center py-20 text-[#8C7A70] text-sm">購物車目前是空的</div> : (
                   cartItemDetails.map((item) => (
                     <div key={item.cartKey} className="flex gap-3 p-3 rounded-xl border border-[#F0EAE1] bg-[#FAF6F0]/40">
-                      <img src={item.images?.[0]} className="w-16 h-16 object-cover rounded-lg" loading="lazy" />
+                      <img 
+                        src={item.image || item.images?.[0]} 
+                        alt={item.name} 
+                        loading="lazy" 
+                        className="w-16 h-16 object-cover rounded-lg shrink-0 border border-[#E8DED1]"
+                      />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-xs font-bold truncate">
                           {item.name}
-                         {Number(item.currentStock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
+                          {Number(item.currentStock) <= 0 && <span className="ml-1.5 text-[9px] text-[#d32f2f] border border-[#d32f2f] px-1 py-0.5 rounded-sm inline-block translate-y-[-1px]">預購</span>}
                         </h4>
                         {(item.selectedSpec1 || item.selectedSpec2) && (
                           <div className="text-[10px] text-[#8C7A70] mt-0.5">規格：{item.selectedSpec1} {item.selectedSpec2}</div>
@@ -1507,7 +1588,12 @@ const handleAddClick = (product) => {
             )}
           </div>
         </div>
+     )}
+    </div>
+    
+        </>
       )}
     </div>
+
   );
 }
