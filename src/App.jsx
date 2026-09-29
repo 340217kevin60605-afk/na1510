@@ -1123,14 +1123,13 @@ const handleAddClick = (product) => {
                     {/* --- 加入 filter 過濾邏輯 --- */}
                     {products.filter(p => selectedCategory === '全部' || p.category === selectedCategory).map((p) => (
                       <div key={p.id} className="bg-white p-3 rounded-xl border flex gap-3 items-center">
-                        {/* 找到商品圖片的 img 標籤，加上 loading="lazy" */}
+{/* ✅ 這是正確的圖片載入寫法 */}
 <img 
-  src={product.images[0]} 
-  alt={product.name} 
+  src={p.images?.[0] || ''} 
+  alt={p.name} 
   loading="lazy" 
-  className="w-full h-full object-cover ..."
-/>
-                        <div className="flex-1">
+  className="w-16 h-16 object-cover rounded-lg shrink-0 border border-[#E8DED1]"
+/>                        <div className="flex-1">
                           <h4 className="font-bold text-sm">{p.name}</h4>
                           <div className="text-[#8C7A70] text-[11px]">共 {p.images.length} 張圖</div>
                           <span className="text-[#A67C52] text-xs font-bold">${p.price}</span>
